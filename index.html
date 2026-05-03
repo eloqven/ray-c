@@ -6,16 +6,87 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ray casting</title>
   <style>
+    html,
     body {
+      width: 100%;
+      height: 100%;
       padding: 0;
       margin: 0;
+      overflow: hidden;
+      background: #000;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    .hud-slider {
+      opacity: 0.05;
+      transition: opacity 120ms ease, filter 120ms ease;
+    }
+
+    body:has(.hud-control:hover) .hud-control,
+    body:has(.hud-control:focus) .hud-control,
+    body:has(.hud-pad.active) .hud-control {
+      opacity: 0.66;
+    }
+
+    .hud-slider:hover,
+    .hud-slider:focus,
+    .hud-slider:focus-visible {
+      opacity: 0.66;
+      filter: drop-shadow(0 0 8px rgba(255, 70, 70, 0.9));
+    }
+
+    .hud-pad {
+      position: absolute;
+      width: 132px;
+      height: 132px;
+      box-sizing: border-box;
+      border: 1px solid rgba(127, 180, 255, 0.7);
+      border-radius: 10px;
+      background:
+        linear-gradient(rgba(127, 180, 255, 0.12), rgba(127, 180, 255, 0.12)) center/1px 100% no-repeat,
+        linear-gradient(90deg, rgba(127, 180, 255, 0.12), rgba(127, 180, 255, 0.12)) center/100% 1px no-repeat,
+        linear-gradient(135deg, rgba(127, 180, 255, 0.14), rgba(20, 28, 44, 0.18));
+      opacity: 0.05;
+      transition: opacity 120ms ease, filter 120ms ease, box-shadow 120ms ease;
+      outline: none;
+    }
+
+    .hud-pad:hover,
+    .hud-pad:focus,
+    .hud-pad:focus-visible,
+    .hud-pad.active {
+      opacity: 0.66;
+      box-shadow: 0 0 0 1px rgba(255, 70, 70, 0.7), 0 0 14px rgba(255, 70, 70, 0.55);
+    }
+
+    .hud-pad-knob {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #d7e7ff;
+      border: 1px solid rgba(127, 180, 255, 0.8);
+      box-shadow: 0 0 10px rgba(127, 180, 255, 0.45);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+
+    input[type="range"] {
+      accent-color: #d0d0d0;
+    }
+
+    input[type="range"]:focus-visible {
+      outline: none;
+      filter: brightness(1.08) drop-shadow(0 0 8px rgba(255, 70, 70, 0.9));
     }
   </style>
   <script src="p5/p5.js"></script>
-  <script src="sketch.js"></script>
   <script src="boundary.js"></script>
   <script src="particle.js"></script>
-  <script src="ray.js"></script>
+  <script src="sketch.js"></script>
 </head>
 
 <body>
