@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ray casting v2</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles_v2.css">
+  <script src="p5/p5.js"></script>
+  <script defer src="boundary.js"></script>
+  <script defer src="particle.js"></script>
+  <script defer src="sketch_v2.js"></script>
+</head>
+<body>
+  <div class="v2-app-shell">
+    <div class="v2-backdrop-glow v2-backdrop-glow-a"></div>
+    <div class="v2-backdrop-glow v2-backdrop-glow-b"></div>
+
+    <div id="stage" class="v2-stage"></div>
+
+    <header class="v2-topbar v2-glass">
+      <div class="v2-brand">
+        <span class="v2-eyebrow">Ray Casting Playground</span>
+        <h1>Ray Casting V2</h1>
+        <p>Cleaner controls, richer HUD, same ray playground.</p>
+      </div>
+
+      <div class="v2-topbar-meta">
+        <div class="v2-status-strip">
+          <span class="v2-status-pill">Desktop HUD</span>
+          <span id="audio-state" class="v2-status-pill v2-status-pill-soft">Audio idle</span>
+          <div class="v2-purr-switcher" aria-label="Purr tracks">
+            <button id="purr-button-0" class="v2-purr-button" type="button" title="Purr track 1">🐱</button>
+            <button id="purr-button-1" class="v2-purr-button" type="button" title="Purr track 2">🐈</button>
+            <button id="purr-button-2" class="v2-purr-button" type="button" title="Purr track 3">😺</button>
+          </div>
+        </div>
+
+        <div id="fps-card" class="v2-fps-card" title="Hover for avg, min and max FPS">
+          <div class="v2-fps-main">
+            <span>Performance</span>
+            <strong id="fps-primary">60.0 FPS</strong>
+          </div>
+          <div class="v2-fps-details">
+            <div class="v2-fps-row"><span>Speed</span><strong id="speed-value">0 px/s</strong></div>
+            <div class="v2-fps-stats">
+              <div><span>AVG</span><strong id="fps-avg">60.0</strong></div>
+              <div><span>MIN</span><strong id="fps-min">60.0</strong></div>
+              <div><span>MAX</span><strong id="fps-max">60.0</strong></div>
+            </div>
+            <div class="v2-fps-row"><span>Max FPS</span><strong id="fps-cap-value">60</strong></div>
+            <div id="slider-fpscap-slot" class="v2-slider-slot v2-fps-slider-slot"></div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <aside class="v2-controls-panel v2-glass">
+      <div class="v2-panel-head">
+        <div>
+          <span class="v2-panel-eyebrow">Live Controls</span>
+          <h2>Viewport Lab</h2>
+        </div>
+        <button id="reset-button" class="v2-reset-button" type="button">
+          Reset
+          <kbd>R</kbd>
+        </button>
+      </div>
+
+      <div class="v2-control-stack">
+        <section class="v2-control-card">
+          <div class="v2-control-meta">
+            <div>
+              <span class="v2-control-label">Field of view</span>
+              <p>Expand or compress the horizontal vision cone.</p>
+            </div>
+            <div class="v2-control-side">
+              <span id="fov-value" class="v2-value-pill">60&deg;</span>
+              <span class="v2-shortcut-pill">1</span>
+            </div>
+          </div>
+          <div id="slider-fov-slot" class="v2-slider-slot"></div>
+        </section>
+
+        <section class="v2-control-card">
+          <div class="v2-control-meta">
+            <div>
+              <span class="v2-control-label">Wall count</span>
+              <p>Add or remove random walls in the room.</p>
+            </div>
+            <div class="v2-control-side">
+              <span id="wall-value" class="v2-value-pill">6</span>
+              <span class="v2-shortcut-pill">2</span>
+            </div>
+          </div>
+          <div id="slider-wall-slot" class="v2-slider-slot"></div>
+        </section>
+
+        <section class="v2-control-card">
+          <div class="v2-control-meta">
+            <div>
+              <span class="v2-control-label">Lens correction</span>
+              <p>Blend between flatter and wider perspective.</p>
+            </div>
+            <div class="v2-control-side">
+              <span id="fish-value" class="v2-value-pill">100%</span>
+              <span class="v2-shortcut-pill">3</span>
+            </div>
+          </div>
+          <div id="slider-fish-slot" class="v2-slider-slot"></div>
+        </section>
+
+        <section class="v2-control-card">
+          <div class="v2-control-meta">
+            <div>
+              <span class="v2-control-label">Ray density</span>
+              <p>Push detail harder when you want sharper wall bands.</p>
+            </div>
+            <div class="v2-control-side">
+              <span id="density-value" class="v2-value-pill">2.0</span>
+              <span class="v2-shortcut-pill">4</span>
+            </div>
+          </div>
+          <div id="slider-density-slot" class="v2-slider-slot"></div>
+        </section>
+
+        <div class="v2-pad-grid">
+          <section class="v2-pad-card">
+            <div class="v2-control-meta">
+              <div>
+                <span class="v2-control-label">View pad</span>
+                <p>X drives field of view. Y drives lens correction.</p>
+              </div>
+              <div class="v2-control-side">
+                <span class="v2-shortcut-pill">1</span>
+                <span class="v2-shortcut-pill">3</span>
+              </div>
+            </div>
+
+            <div id="view-pad" class="v2-chaos-pad" tabindex="0" aria-label="View pad">
+              <div class="v2-chaos-grid"></div>
+              <div class="v2-chaos-axis v2-chaos-axis-x">Field of view</div>
+              <div class="v2-chaos-axis v2-chaos-axis-y">Lens correction</div>
+              <div id="view-pad-knob" class="v2-chaos-knob"></div>
+            </div>
+
+            <div class="v2-pad-readout">
+              <div>
+                <span>X</span>
+                <strong id="view-fov-value">60&deg;</strong>
+              </div>
+              <div>
+                <span>Y</span>
+                <strong id="view-fish-value">100%</strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="v2-pad-card">
+            <div class="v2-control-meta">
+              <div>
+                <span class="v2-control-label">Depth pad</span>
+                <p>X spreads depth. Y adds contrast. Try both live.</p>
+              </div>
+              <div class="v2-control-side">
+                <span class="v2-shortcut-pill">5</span>
+                <span class="v2-shortcut-pill">6</span>
+              </div>
+            </div>
+
+            <div id="chaos-pad" class="v2-chaos-pad" tabindex="0" aria-label="Depth pad">
+              <div class="v2-chaos-grid"></div>
+              <div class="v2-chaos-axis v2-chaos-axis-x">Distance spread</div>
+              <div class="v2-chaos-axis v2-chaos-axis-y">Depth contrast</div>
+              <div id="chaos-knob" class="v2-chaos-knob"></div>
+            </div>
+
+            <div class="v2-pad-readout">
+              <div>
+                <span>X</span>
+                <strong id="distance-value">0%</strong>
+              </div>
+              <div>
+                <span>Y</span>
+                <strong id="contrast-value">0%</strong>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </aside>
+
+    <aside class="v2-legend-panel v2-glass">
+      <span class="v2-panel-eyebrow">Shortcuts</span>
+      <ul>
+        <li><strong>W A S D</strong><span>Move and rotate</span></li>
+        <li><strong>Shift</strong><span>Move 50% faster</span></li>
+        <li><strong>1-4</strong><span>Focus and cycle sliders</span></li>
+        <li><strong>5 / 6</strong><span>Drive the depth pad axes</span></li>
+        <li><strong>Ctrl+S</strong><span>Save current settings locally</span></li>
+        <li><strong>Reload page</strong><span>Restore the last local save</span></li>
+        <li><strong>R</strong><span>Reset the scene to startup state</span></li>
+      </ul>
+    </aside>
+  </div>
+</body>
+</html>
