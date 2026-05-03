@@ -33,6 +33,7 @@ Main controls:
 - `R` reset to startup state
 - `Ctrl+S` save current settings to `localStorage`
 - `C` toggle the hidden bottom-wall color controls
+- use the `Wall collision` checkbox to toggle collision on/off
 
 Quick parameter keys:
 - `1` field of view
@@ -42,7 +43,7 @@ Quick parameter keys:
 - `5` depth pad X
 - `6` depth pad Y
 - `7` catnip count
-- `8` interior wall scale
+- `8` interior wall width
 - `9` wall roundness
 - `0` top depth
 

@@ -21,23 +21,16 @@ class Boundary {
     this._segments = null;
   }
 
-  applyScale(scalePercent = 100) {
+  applyWidth(width) {
     if (this.isExterior) {
       return;
     }
-
-    const scale = scalePercent / 100;
-    const centerX = (this.baseX1 + this.baseX2) / 2;
-    const centerY = (this.baseY1 + this.baseY2) / 2;
-    const halfDX = ((this.baseX2 - this.baseX1) / 2) * scale;
-    const halfDY = ((this.baseY2 - this.baseY1) / 2) * scale;
-
     this.setGeometry(
-      centerX - halfDX,
-      centerY - halfDY,
-      centerX + halfDX,
-      centerY + halfDY,
-      Math.max(1, this.baseWidth * scale)
+      this.baseX1,
+      this.baseY1,
+      this.baseX2,
+      this.baseY2,
+      Math.max(1, width)
     );
   }
 

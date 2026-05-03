@@ -89,6 +89,7 @@ let sliderNearWallB;
 let sliderFarWallR;
 let sliderFarWallG;
 let sliderFarWallB;
+let collisionCheckbox;
 let shortcutBindings = [];
 let wallCount = 6;
 let ambientAudioStarted = false;
@@ -123,6 +124,7 @@ let hudFeedbackLabel = '';
 let hudFeedbackValue = '';
 let hudFeedbackUntilMs = 0;
 let wallColorControlsVisible = false;
+let wallCollisionEnabled = false;
 
 function setup() {
   updateViewportSize();
@@ -156,7 +158,7 @@ function updateViewportSize() {
 }
 
 function getPadTop() {
-  return CONTROL_TOP + (CONTROL_SPACING * 9) + PAD_ROW_GAP;
+  return CONTROL_TOP + (CONTROL_SPACING * 10) + PAD_ROW_GAP;
 }
 
 function createBorderWall(x1, y1, x2, y2) {
@@ -328,6 +330,17 @@ function layoutWallColorControls() {
   }
 }
 
+function setWallCollisionEnabled(enabled, showFeedback = false) {
+  wallCollisionEnabled = Boolean(enabled);
+  if (collisionCheckbox) {
+    collisionCheckbox.checked(wallCollisionEnabled);
+  }
+
+  if (showFeedback) {
+    showHudFeedback('Wall collision', wallCollisionEnabled ? 'On' : 'Off');
+  }
+}
+
 function setWallColorControlsVisible(visible) {
   wallColorControlsVisible = visible;
   for (const control of getWallColorControls()) {
@@ -354,6 +367,33 @@ function getWallColorConfig() {
   };
 }
 
+function pointInPolygon(x, y, polygon) {
+  let inside = false;
+
+  for (let current = 0, previous = polygon.length - 1; current < polygon.length; previous = current++) {
+    const currentPoint = polygon[current];
+    const previousPoint = polygon[previous];
+    const intersects = ((currentPoint.y > y) !== (previousPoint.y > y)) &&
+      (x < (((previousPoint.x - currentPoint.x) * (y - currentPoint.y)) / ((previousPoint.y - currentPoint.y) || 1e-9)) + currentPoint.x);
+
+    if (intersects) {
+      inside = !inside;
+    }
+  }
+
+  return inside;
+}
+
+function collidesWithAnyWall(x, y) {
+  for (const wall of walls) {
+    if (pointInPolygon(x, y, wall.getCorners())) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function showHudFeedback(label, value) {
   hudFeedbackLabel = label;
   hudFeedbackValue = value;
@@ -366,13 +406,14 @@ function formatSliderValue(value, digits = 0) {
 
 function applyInteriorWallScale(showFeedback = false) {
   const wallScalePercent = sliderWallScale ? Number(sliderWallScale.value()) : DEFAULT_WALL_SCALE;
+  const mappedWidth = map(wallScalePercent, WALL_SCALE_MIN, WALL_SCALE_MAX, 10, 18, true);
 
   for (let index = BORDER_WALL_COUNT; index < walls.length; index++) {
-    walls[index].applyScale(wallScalePercent);
+    walls[index].applyWidth(mappedWidth);
   }
 
   if (showFeedback && sliderWallScale) {
-    showHudFeedback('Interior wall scale', `${Math.round(wallScalePercent)}%`);
+    showHudFeedback('Interior wall width', `${mappedWidth.toFixed(1)}px`);
   }
 }
 
@@ -409,7 +450,7 @@ function createControls() {
 
   sliderWallScale = createSlider(WALL_SCALE_MIN, WALL_SCALE_MAX, DEFAULT_WALL_SCALE, 1);
   sliderWallScale.input(() => applyInteriorWallScale(true));
-  styleSlider(sliderWallScale, '8', 'Interior wall scale');
+  styleSlider(sliderWallScale, '8', 'Interior wall width');
 
   sliderWallRoundness = createSlider(0, 100, DEFAULT_WALL_ROUNDNESS, 1);
   sliderWallRoundness.input(() => {
@@ -433,6 +474,13 @@ function createControls() {
   sliderFarWallR = createWallColorSlider('Far wall red', DEFAULT_FAR_WALL_COLOR.r);
   sliderFarWallG = createWallColorSlider('Far wall green', DEFAULT_FAR_WALL_COLOR.g);
   sliderFarWallB = createWallColorSlider('Far wall blue', DEFAULT_FAR_WALL_COLOR.b);
+
+  collisionCheckbox = createCheckbox(' Wall collision', wallCollisionEnabled);
+  collisionCheckbox.addClass('hud-control');
+  collisionCheckbox.addClass('hud-check');
+  collisionCheckbox.changed(() => {
+    setWallCollisionEnabled(collisionCheckbox.checked(), true);
+  });
 
   createChaosPad();
   createViewPad();
@@ -490,6 +538,9 @@ function layoutControls() {
   sliderWallRoundness.position(CONTROL_LEFT, CONTROL_TOP + (CONTROL_SPACING * 6));
   sliderTopPerspective.position(CONTROL_LEFT, CONTROL_TOP + (CONTROL_SPACING * 7));
   sliderSplitView.position(CONTROL_LEFT, CONTROL_TOP + (CONTROL_SPACING * 8));
+  if (collisionCheckbox) {
+    collisionCheckbox.position(CONTROL_LEFT, CONTROL_TOP + (CONTROL_SPACING * 9));
+  }
   layoutWallColorControls();
 
   if (chaosPad) {
@@ -616,7 +667,7 @@ function createFpsCapSlider() {
 function setHudVisible(visible) {
   hudVisible = visible;
 
-  const domControls = [sliderFOV, sliderWall, sliderFish, sliderDensity, sliderCatnip, sliderWallScale, sliderWallRoundness, sliderTopPerspective, sliderSplitView, sliderFpsCap, chaosPad, viewPad];
+  const domControls = [sliderFOV, sliderWall, sliderFish, sliderDensity, sliderCatnip, sliderWallScale, sliderWallRoundness, sliderTopPerspective, sliderSplitView, collisionCheckbox, sliderFpsCap, chaosPad, viewPad];
   for (const control of domControls) {
     if (!control) {
       continue;
@@ -982,6 +1033,10 @@ function resetToDefaults() {
     sliderFarWallB.value(defaultState.farWallB);
   }
 
+  if (typeof defaultState.wallCollisionEnabled === 'boolean') {
+    setWallCollisionEnabled(defaultState.wallCollisionEnabled, false);
+  }
+
   if (Number.isFinite(defaultState.purrTrackIndex)) {
     setPurrTrack(defaultState.purrTrackIndex, ambientAudioStarted);
   }
@@ -1049,6 +1104,7 @@ function getCurrentSettings() {
     farWallR: sliderFarWallR ? Number(sliderFarWallR.value()) : DEFAULT_FAR_WALL_COLOR.r,
     farWallG: sliderFarWallG ? Number(sliderFarWallG.value()) : DEFAULT_FAR_WALL_COLOR.g,
     farWallB: sliderFarWallB ? Number(sliderFarWallB.value()) : DEFAULT_FAR_WALL_COLOR.b,
+    wallCollisionEnabled,
     fpsCap: sliderFpsCap ? Number(sliderFpsCap.value()) : DEFAULT_FPS_CAP,
     purrTrackIndex: activePurrTrackIndex,
     catnipTargetCount,
@@ -1143,6 +1199,10 @@ function applySettings(settings) {
 
   if (sliderFarWallB && Number.isFinite(effectiveSettings.farWallB)) {
     sliderFarWallB.value(clamp(effectiveSettings.farWallB, 0, 255));
+  }
+
+  if (typeof effectiveSettings.wallCollisionEnabled === 'boolean') {
+    setWallCollisionEnabled(effectiveSettings.wallCollisionEnabled, false);
   }
 
   if (sliderFpsCap && Number.isFinite(effectiveSettings.fpsCap)) {
@@ -1280,11 +1340,29 @@ function handleInput() {
   }
 
   if (keyIsDown(87)) {
-    particle.move(moveSpeed);
+    if (wallCollisionEnabled) {
+      const nextX = particle.pos.x + (Math.cos(particle.heading) * moveSpeed);
+      const nextY = particle.pos.y + (Math.sin(particle.heading) * moveSpeed);
+      if (!collidesWithAnyWall(nextX, nextY)) {
+        particle.pos.x = nextX;
+        particle.pos.y = nextY;
+      }
+    } else {
+      particle.move(moveSpeed);
+    }
   }
 
   if (keyIsDown(83)) {
-    particle.move(-moveSpeed);
+    if (wallCollisionEnabled) {
+      const nextX = particle.pos.x - (Math.cos(particle.heading) * moveSpeed);
+      const nextY = particle.pos.y - (Math.sin(particle.heading) * moveSpeed);
+      if (!collidesWithAnyWall(nextX, nextY)) {
+        particle.pos.x = nextX;
+        particle.pos.y = nextY;
+      }
+    } else {
+      particle.move(-moveSpeed);
+    }
   }
 }
 
