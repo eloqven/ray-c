@@ -17,7 +17,7 @@ const SLIDER_HOLD_REPEAT_MS = 80;
 const FISH_EYE_MAX_PROJECTION_DEG = 82;
 const PROXIMITY_SHADOW_START = 600;
 const PROXIMITY_SHADOW_MAX = 171;
-const SETTINGS_STORAGE_KEY = 'ray-casting-settings-v1';
+const SETTINGS_STORAGE_KEY = 'ray-casting-settings-v2';
 const EXTERIOR_SCALE_ICON = '\u{1F431}';
 const FPS_CAP_MIN = 6;
 const FPS_CAP_MAX = 60;
@@ -198,7 +198,7 @@ function createControls() {
     frameRate(Number(sliderFpsCap.value()));
     updateHudValues();
   });
-  styleSlider(sliderFpsCap, 'none', 'Max FPS');
+  styleSlider(sliderFpsCap, null, 'Max FPS');
   frameRate(DEFAULT_FPS_CAP);
 
   setupViewPad();
@@ -238,7 +238,7 @@ function styleSlider(slider, shortcutKey, label) {
   slider.addClass('hud-slider');
   slider.style('width', '100%');
   slider.attribute('aria-label', label);
-  slider.elt.title = `${shortcutKey} - ${label}`;
+  slider.elt.title = shortcutKey ? `${shortcutKey} - ${label}` : label;
 }
 
 function createSliderBinding(slider, step, onChange) {
@@ -773,8 +773,13 @@ function processSliderShortcuts() {
   }
 }
 
+function isSaveShortcutHeld() {
+  return keyIsDown(CONTROL) || keyIsDown(91) || keyIsDown(93);
+}
+
 function handleInput() {
   const moveSpeed = keyIsDown(16) ? MOVE_SPEED * SPRINT_MULTIPLIER : MOVE_SPEED;
+  const saveShortcutHeld = isSaveShortcutHeld();
 
   if (keyIsDown(65)) {
     particle.rotate(-ROTATION_SPEED);
@@ -785,11 +790,11 @@ function handleInput() {
   }
 
   if (keyIsDown(87)) {
-    particle.move(moveSpeed);
+    particle.move(moveSpeed, worldW, worldH);
   }
 
-  if (keyIsDown(83)) {
-    particle.move(-moveSpeed);
+  if (keyIsDown(83) && !saveShortcutHeld) {
+    particle.move(-moveSpeed, worldW, worldH);
   }
 }
 
@@ -1063,7 +1068,7 @@ function draw() {
 function keyPressed() {
   initAmbientAudio();
 
-  if ((key === 's' || key === 'S') && (keyIsDown(CONTROL) || keyIsDown(91) || keyIsDown(93))) {
+if ((key === 's' || key === 'S') && isSaveShortcutHeld()) {
     saveCurrentSettingsToStorage();
     return false;
   }
@@ -1073,33 +1078,9 @@ function keyPressed() {
     return false;
   }
 
-  if (key === '1') {
-    focusSlider(0);
-    return false;
-  }
-
-  if (key === '2') {
-    focusSlider(1);
-    return false;
-  }
-
-  if (key === '3') {
-    focusSlider(2);
-    return false;
-  }
-
-  if (key === '4') {
-    focusSlider(3);
-    return false;
-  }
-
-  if (key === '5') {
-    focusSlider(4);
-    return false;
-  }
-
-  if (key === '6') {
-    focusSlider(5);
+  const sliderIndex = Number(key) - 1;
+  if (sliderIndex >= 0 && sliderIndex < shortcutBindings.length) {
+    focusSlider(sliderIndex);
     return false;
   }
 }
