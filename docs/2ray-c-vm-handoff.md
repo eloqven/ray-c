@@ -72,3 +72,8 @@ and complete the **2Ray-C** prototype pair to the spec in the repo:
   is ambiguous, follow prototype-c's behavior — it is the reference — and note it.
 - Keep the prototype minimal per the plan's Out-of-scope list: no colors beyond white-on-black,
   no sliders, no extra features, no UI frameworks, no tests frameworks.
+
+## Session rule (persistent, written down)
+
+- NEVER use/impersonate another model persona, or invoke another provider's model ID,
+  without explicit confirmation from the project owner first.
