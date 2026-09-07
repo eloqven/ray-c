@@ -31,8 +31,9 @@ Evidence: `~/.handoff-artifacts/parity-a-vs-c.txt` (host-side, not committed).
 - TS-004 — borders fixed, exactly 1 interior wall, wall re-rolled per refresh: PASS
 - TS-005 — `update()` from `src/input.ts` keeps player in-box (clamped at
   `PLAYER_RADIUS`), heading wraps, no pushback: PASS
-- TS-006 — real `tickFps` from `src/fps.ts` ticks 4x over ~2s (uncapped rAF):
-  PASS
+- TS-006 — real `tickFps` from `src/fps.ts` ticks 4x over ~2s (uncapped rAF);
+  displayed value asserted non-NaN finite number (`FPS: 120`, computed from
+  PRE-reset state — no 0/0): PASS
 
 Evidence: `~/.handoff-artifacts/ts-004-005-006.txt`.
 

@@ -14,18 +14,23 @@ export function createFpsState(): FpsState {
   return { frames: 0, t: performance.now(), last: performance.now() };
 }
 
-// Tick the counter; returns true when the display should update.
-export function tickFps(state: FpsState, now: number): boolean {
+// Tick the counter. Returns the FPS text when the display should update
+// (every >=500ms), else null. The text is computed from the PRE-RESET state
+// before the counter/timestamp are reset — mirroring prototype-c exactly:
+//   fps.frames++;
+//   if (now - fps.t >= 500) {
+//     fpsEl.textContent = 'FPS: ' + Math.round((fps.frames * 1000) / (now - fps.t));
+//     fps.frames = 0;
+//     fps.t = now;
+//   }
+export function tickFps(state: FpsState, now: number): string | null {
   state.last = now;
   state.frames++;
   if (now - state.t >= 500) {
+    const text = 'FPS: ' + Math.round((state.frames * 1000) / (now - state.t));
     state.frames = 0;
     state.t = now;
-    return true;
+    return text;
   }
-  return false;
-}
-
-export function fpsText(state: FpsState, now: number): string {
-  return 'FPS: ' + Math.round((state.frames * 1000) / (now - state.t));
+  return null;
 }

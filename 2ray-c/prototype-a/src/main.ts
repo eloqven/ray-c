@@ -9,7 +9,7 @@ import { resize as resizeWorld } from './world';
 import { castRays } from './raycast';
 import { init as initInput, update as updateInput } from './input';
 import { renderMap, renderScene } from './render';
-import { createFpsState, tickFps, fpsText } from './fps';
+import { createFpsState, tickFps } from './fps';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d') as CanvasRenderingContext2D;
@@ -37,8 +37,9 @@ function frame(now: number): void {
   const rays = castRays(viewAngle, rayDensity);
   renderMap(ctx, rays, window.innerWidth, window.innerHeight);
   renderScene(ctx, rays, window.innerWidth, window.innerHeight);
-  if (tickFps(fps, now)) {
-    fpsEl.textContent = fpsText(fps, now);
+  const fpsText = tickFps(fps, now);
+  if (fpsText !== null) {
+    fpsEl.textContent = fpsText;
   }
   requestAnimationFrame(frame);
 }
