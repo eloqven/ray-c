@@ -10,7 +10,8 @@ Branch: `experiment/2ray-c`
 Rebuild the ray-casting playground ground-up as **2Ray-C**: keep only the core
 essential experience — the two stacked views, two numeric controls, and raw
 monochrome rendering — and evaluate two modern technology stacks side by side
-(p5.js-era global-sketch style vs. a modular TypeScript toolchain) with
+(plain-JS global-sketch style (no build, no deps) vs. a modular TypeScript
+toolchain) with
 identical, minimal scope so the stack decision is an apples-to-apples comparison.
 
 ## Goals and success metrics

@@ -49,7 +49,7 @@ export function fpsText(state: FpsState, now: number): string {
 }
 ```
 
-Caller (`2ray-c/prototype-a/src/main.ts:34-45`, pre-fix):
+Caller (`2ray-c/prototype-a/src/main.ts:40-42`, pre-fix):
 
 ```ts
 if (tickFps(fps, now)) {
