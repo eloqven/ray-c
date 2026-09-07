@@ -21,15 +21,22 @@ class Boundary {
     this._segments = null;
   }
 
-  applyWidth(width) {
+  applyLengthAndWidth(scalePercent = 100, width = this.baseWidth) {
     if (this.isExterior) {
       return;
     }
+
+    const scale = scalePercent / 100;
+    const centerX = (this.baseX1 + this.baseX2) / 2;
+    const centerY = (this.baseY1 + this.baseY2) / 2;
+    const halfDX = ((this.baseX2 - this.baseX1) / 2) * scale;
+    const halfDY = ((this.baseY2 - this.baseY1) / 2) * scale;
+
     this.setGeometry(
-      this.baseX1,
-      this.baseY1,
-      this.baseX2,
-      this.baseY2,
+      centerX - halfDX,
+      centerY - halfDY,
+      centerX + halfDX,
+      centerY + halfDY,
       Math.max(1, width)
     );
   }
@@ -72,16 +79,39 @@ class Boundary {
     return this._segments;
   }
 
+  getLength() {
+    return Math.hypot(this.x2 - this.x1, this.y2 - this.y1);
+  }
+
+  getAngle() {
+    return Math.atan2(this.y2 - this.y1, this.x2 - this.x1);
+  }
+
+  getCenter() {
+    return {
+      x: (this.x1 + this.x2) / 2,
+      y: (this.y1 + this.y2) / 2,
+    };
+  }
+
+  getCornerRadius() {
+    return Math.min(this.width * 0.33, this.width / 2, this.getLength() / 2);
+  }
+
   show() {
-    const corners = this.getCorners();
+    const center = this.getCenter();
+    const length = this.getLength();
+    const angle = this.getAngle();
+    const radius = this.getCornerRadius();
+
+    push();
+    translate(center.x, center.y);
+    rotate(angle);
+    rectMode(CENTER);
     noFill();
     stroke(205, 215, 230, 185);
     strokeWeight(1.5);
-    quad(
-      corners[0].x, corners[0].y,
-      corners[1].x, corners[1].y,
-      corners[2].x, corners[2].y,
-      corners[3].x, corners[3].y
-    );
+    rect(0, 0, length, this.width, radius);
+    pop();
   }
 }

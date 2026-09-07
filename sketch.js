@@ -1,4 +1,4 @@
-const BORDER_WALL_COUNT = 4;
+const BORDER_WALL_COUNT = 8;
 const MOVE_SPEED = 3;
 const SPRINT_MULTIPLIER = 1.5;
 const ROTATION_SPEED = 0.03;
@@ -44,12 +44,17 @@ const TOP_VIEW_GRID_STEP = 96;
 const TOP_EXTRUSION_MIN = 0;
 const TOP_EXTRUSION_MAX = 84;
 const TOP_CAP_SCALE_MAX = 0.22;
+const DEFAULT_TOP_SIDE_REVEAL_DISTANCE = 96;
+const TOP_SIDE_REVEAL_MIN = 0;
+const TOP_SIDE_REVEAL_MAX = 240;
 const HUD_FEEDBACK_DURATION_MS = 1200;
 const SPLIT_VIEW_MIN = 20;
 const SPLIT_VIEW_MAX = 80;
 const DEFAULT_SPLIT_VIEW = 50;
 const DEFAULT_NEAR_WALL_COLOR = { r: 255, g: 194, b: 146 };
 const DEFAULT_FAR_WALL_COLOR = { r: 34, g: 52, b: 12 };
+const EXTERIOR_GATE_SIZE_MIN = 180;
+const EXTERIOR_GATE_SIZE_MAX = 320;
 const RANDOM_WALL_DIRECTIONS = [
   { x: 1, y: 0 },
   { x: 0, y: 1 },
@@ -82,6 +87,7 @@ let sliderCatnip;
 let sliderWallScale;
 let sliderWallRoundness;
 let sliderTopPerspective;
+let sliderTopSideReveal;
 let sliderSplitView;
 let sliderNearWallR;
 let sliderNearWallG;
@@ -91,7 +97,7 @@ let sliderFarWallG;
 let sliderFarWallB;
 let collisionCheckbox;
 let shortcutBindings = [];
-let wallCount = 6;
+let wallCount = 10;
 let ambientAudioStarted = false;
 let purrAudio = null;
 let activePurrTrackIndex = 0;
@@ -158,7 +164,7 @@ function updateViewportSize() {
 }
 
 function getPadTop() {
-  return CONTROL_TOP + (CONTROL_SPACING * 10) + PAD_ROW_GAP;
+  return CONTROL_TOP + (CONTROL_SPACING * 11) + PAD_ROW_GAP;
 }
 
 function createBorderWall(x1, y1, x2, y2) {
@@ -183,6 +189,20 @@ function createInteriorWall(x1, y1, x2, y2, width) {
   });
 }
 
+function getExteriorGateSize() {
+  return clamp(Math.min(worldW, worldH) * 0.18, EXTERIOR_GATE_SIZE_MIN, EXTERIOR_GATE_SIZE_MAX);
+}
+
+function wallTouchesWorldBounds(wall, width, height) {
+  const tolerance = 1;
+  return (
+    (Math.abs(wall.y1) <= tolerance && Math.abs(wall.y2) <= tolerance) ||
+    (Math.abs(wall.x1 - width) <= tolerance && Math.abs(wall.x2 - width) <= tolerance) ||
+    (Math.abs(wall.y1 - height) <= tolerance && Math.abs(wall.y2 - height) <= tolerance) ||
+    (Math.abs(wall.x1) <= tolerance && Math.abs(wall.x2) <= tolerance)
+  );
+}
+
 function rebuildWalls() {
   walls = buildBorderWalls();
 
@@ -191,11 +211,21 @@ function rebuildWalls() {
 }
 
 function buildBorderWalls() {
+  const gateSize = getExteriorGateSize();
+  const topGateStart = (worldW - gateSize) / 2;
+  const topGateEnd = topGateStart + gateSize;
+  const sideGateStart = (worldH - gateSize) / 2;
+  const sideGateEnd = sideGateStart + gateSize;
+
   return [
-    createBorderWall(0, 0, worldW, 0),
-    createBorderWall(worldW, 0, worldW, worldH),
-    createBorderWall(worldW, worldH, 0, worldH),
-    createBorderWall(0, worldH, 0, 0),
+    createBorderWall(0, 0, topGateStart, 0),
+    createBorderWall(topGateEnd, 0, worldW, 0),
+    createBorderWall(worldW, 0, worldW, sideGateStart),
+    createBorderWall(worldW, sideGateEnd, worldW, worldH),
+    createBorderWall(worldW, worldH, topGateEnd, worldH),
+    createBorderWall(topGateStart, worldH, 0, worldH),
+    createBorderWall(0, worldH, 0, sideGateEnd),
+    createBorderWall(0, sideGateStart, 0, 0),
   ];
 }
 
@@ -217,7 +247,7 @@ function scaleSettingsToWorld(settings, sourceWorldW, sourceWorldH, targetWorldW
     playerY: Number.isFinite(settings.playerY) ? settings.playerY * scaleY : settings.playerY,
     walls: Array.isArray(settings.walls)
       ? settings.walls.map((wall, index) => {
-        if (index < BORDER_WALL_COUNT || wall.isExterior) {
+        if (wall.isExterior === true || wallTouchesWorldBounds(wall, sourceWorldW, sourceWorldH)) {
           return borderWalls[index] ?? borderWalls[index % BORDER_WALL_COUNT];
         }
 
@@ -257,7 +287,7 @@ function rescaleWorldState(previousWorldW, previousWorldH) {
   const borderWalls = buildBorderWalls();
 
   for (let index = 0; index < walls.length; index++) {
-    if (index < BORDER_WALL_COUNT) {
+    if (walls[index].isExterior === true || wallTouchesWorldBounds(walls[index], previousWorldW, previousWorldH)) {
       scaledWalls[index] = borderWalls[index];
       continue;
     }
@@ -292,7 +322,7 @@ function styleSlider(slider, shortcutKey, label) {
   slider.addClass('hud-control');
   slider.addClass('hud-slider');
   slider.style('width', `${CONTROL_WIDTH}px`);
-  slider.elt.title = `${shortcutKey} - ${label}`;
+  slider.elt.title = shortcutKey ? `${shortcutKey} - ${label}` : label;
 }
 
 function createWallColorSlider(label, initialValue) {
@@ -409,11 +439,11 @@ function applyInteriorWallScale(showFeedback = false) {
   const mappedWidth = map(wallScalePercent, WALL_SCALE_MIN, WALL_SCALE_MAX, 10, 18, true);
 
   for (let index = BORDER_WALL_COUNT; index < walls.length; index++) {
-    walls[index].applyWidth(mappedWidth);
+    walls[index].applyLengthAndWidth(wallScalePercent, mappedWidth);
   }
 
   if (showFeedback && sliderWallScale) {
-    showHudFeedback('Interior wall width', `${mappedWidth.toFixed(1)}px`);
+    showHudFeedback('Interior wall size', `${mappedWidth.toFixed(1)}px · ${Math.round(wallScalePercent)}% length`);
   }
 }
 
@@ -450,7 +480,7 @@ function createControls() {
 
   sliderWallScale = createSlider(WALL_SCALE_MIN, WALL_SCALE_MAX, DEFAULT_WALL_SCALE, 1);
   sliderWallScale.input(() => applyInteriorWallScale(true));
-  styleSlider(sliderWallScale, '8', 'Interior wall width');
+  styleSlider(sliderWallScale, '8', 'Interior wall size');
 
   sliderWallRoundness = createSlider(0, 100, DEFAULT_WALL_ROUNDNESS, 1);
   sliderWallRoundness.input(() => {
@@ -463,6 +493,12 @@ function createControls() {
     showHudFeedback('Top depth', `${Math.round(Number(sliderTopPerspective.value()))}%`);
   });
   styleSlider(sliderTopPerspective, '0', 'Top depth');
+
+  sliderTopSideReveal = createSlider(TOP_SIDE_REVEAL_MIN, TOP_SIDE_REVEAL_MAX, DEFAULT_TOP_SIDE_REVEAL_DISTANCE, 1);
+  sliderTopSideReveal.input(() => {
+    showHudFeedback('Top side reveal', `${Math.round(Number(sliderTopSideReveal.value()))}px`);
+  });
+  styleSlider(sliderTopSideReveal, null, 'Top side reveal');
 
   sliderSplitView = createSlider(SPLIT_VIEW_MIN, SPLIT_VIEW_MAX, DEFAULT_SPLIT_VIEW, 1);
   sliderSplitView.input(() => handleSplitViewChange(true));
@@ -537,9 +573,10 @@ function layoutControls() {
   sliderWallScale.position(CONTROL_LEFT, CONTROL_TOP + (CONTROL_SPACING * 5));
   sliderWallRoundness.position(CONTROL_LEFT, CONTROL_TOP + (CONTROL_SPACING * 6));
   sliderTopPerspective.position(CONTROL_LEFT, CONTROL_TOP + (CONTROL_SPACING * 7));
-  sliderSplitView.position(CONTROL_LEFT, CONTROL_TOP + (CONTROL_SPACING * 8));
+  sliderTopSideReveal.position(CONTROL_LEFT, CONTROL_TOP + (CONTROL_SPACING * 8));
+  sliderSplitView.position(CONTROL_LEFT, CONTROL_TOP + (CONTROL_SPACING * 9));
   if (collisionCheckbox) {
-    collisionCheckbox.position(CONTROL_LEFT, CONTROL_TOP + (CONTROL_SPACING * 9));
+    collisionCheckbox.position(CONTROL_LEFT, CONTROL_TOP + (CONTROL_SPACING * 10));
   }
   layoutWallColorControls();
 
@@ -667,7 +704,7 @@ function createFpsCapSlider() {
 function setHudVisible(visible) {
   hudVisible = visible;
 
-  const domControls = [sliderFOV, sliderWall, sliderFish, sliderDensity, sliderCatnip, sliderWallScale, sliderWallRoundness, sliderTopPerspective, sliderSplitView, collisionCheckbox, sliderFpsCap, chaosPad, viewPad];
+  const domControls = [sliderFOV, sliderWall, sliderFish, sliderDensity, sliderCatnip, sliderWallScale, sliderWallRoundness, sliderTopPerspective, sliderTopSideReveal, sliderSplitView, collisionCheckbox, sliderFpsCap, chaosPad, viewPad];
   for (const control of domControls) {
     if (!control) {
       continue;
@@ -999,6 +1036,10 @@ function resetToDefaults() {
     sliderTopPerspective.value(defaultState.topPerspective);
   }
 
+  if (sliderTopSideReveal && Number.isFinite(defaultState.topSideRevealDistance)) {
+    sliderTopSideReveal.value(defaultState.topSideRevealDistance);
+  }
+
   if (sliderSplitView && Number.isFinite(defaultState.splitView)) {
     sliderSplitView.value(defaultState.splitView);
     handleSplitViewChange(false, true);
@@ -1097,6 +1138,7 @@ function getCurrentSettings() {
     wallScalePercent: sliderWallScale ? Number(sliderWallScale.value()) : DEFAULT_WALL_SCALE,
     wallRoundness: sliderWallRoundness ? Number(sliderWallRoundness.value()) : DEFAULT_WALL_ROUNDNESS,
     topPerspective: sliderTopPerspective ? Number(sliderTopPerspective.value()) : DEFAULT_TOP_PERSPECTIVE,
+    topSideRevealDistance: sliderTopSideReveal ? Number(sliderTopSideReveal.value()) : DEFAULT_TOP_SIDE_REVEAL_DISTANCE,
     splitView: sliderSplitView ? Number(sliderSplitView.value()) : DEFAULT_SPLIT_VIEW,
     nearWallR: sliderNearWallR ? Number(sliderNearWallR.value()) : DEFAULT_NEAR_WALL_COLOR.r,
     nearWallG: sliderNearWallG ? Number(sliderNearWallG.value()) : DEFAULT_NEAR_WALL_COLOR.g,
@@ -1177,6 +1219,10 @@ function applySettings(settings) {
     sliderTopPerspective.value(clamp(effectiveSettings.topPerspective, TOP_PERSPECTIVE_MIN, TOP_PERSPECTIVE_MAX));
   }
 
+  if (sliderTopSideReveal && Number.isFinite(effectiveSettings.topSideRevealDistance)) {
+    sliderTopSideReveal.value(clamp(effectiveSettings.topSideRevealDistance, TOP_SIDE_REVEAL_MIN, TOP_SIDE_REVEAL_MAX));
+  }
+
   if (sliderNearWallR && Number.isFinite(effectiveSettings.nearWallR)) {
     sliderNearWallR.value(clamp(effectiveSettings.nearWallR, 0, 255));
   }
@@ -1237,27 +1283,22 @@ function applySettings(settings) {
     );
   }
 
-  const restoredWalls = Array.isArray(effectiveSettings.walls)
+  const restoredInteriorWalls = Array.isArray(effectiveSettings.walls)
     ? effectiveSettings.walls
       .filter((wall) => wall && [wall.x1, wall.y1, wall.x2, wall.y2].every(Number.isFinite))
-      .map((wall, index) => {
-        if (index < BORDER_WALL_COUNT || wall.isExterior) {
-          return buildBorderWalls()[index] ?? buildBorderWalls()[index % BORDER_WALL_COUNT];
-        }
-
-        return createInteriorWall(
-          Number.isFinite(wall.baseX1) ? wall.baseX1 : wall.x1,
-          Number.isFinite(wall.baseY1) ? wall.baseY1 : wall.y1,
-          Number.isFinite(wall.baseX2) ? wall.baseX2 : wall.x2,
-          Number.isFinite(wall.baseY2) ? wall.baseY2 : wall.y2,
-          Number.isFinite(wall.baseWidth) ? wall.baseWidth : (Number.isFinite(wall.width) ? wall.width : 20)
-        );
-      })
+      .filter((wall) => !(wall.isExterior === true || wallTouchesWorldBounds(wall, worldW, worldH)))
+      .map((wall) => createInteriorWall(
+        Number.isFinite(wall.baseX1) ? wall.baseX1 : wall.x1,
+        Number.isFinite(wall.baseY1) ? wall.baseY1 : wall.y1,
+        Number.isFinite(wall.baseX2) ? wall.baseX2 : wall.x2,
+        Number.isFinite(wall.baseY2) ? wall.baseY2 : wall.y2,
+        Number.isFinite(wall.baseWidth) ? wall.baseWidth : (Number.isFinite(wall.width) ? wall.width : 20)
+      ))
     : [];
 
-  if (restoredWalls.length >= BORDER_WALL_COUNT) {
-    walls = restoredWalls;
-    wallCount = restoredWalls.length;
+  if (restoredInteriorWalls.length > 0) {
+    walls = [...buildBorderWalls(), ...restoredInteriorWalls];
+    wallCount = walls.length;
     sliderWall.value(clamp(wallCount, Number(sliderWall.elt.min), Number(sliderWall.elt.max)));
     applyInteriorWallScale();
   } else if (Number.isFinite(effectiveSettings.wallCount)) {
@@ -1514,23 +1555,119 @@ function drawTopGrid() {
   }
 }
 
+function getRoundedWallShapeFromCorners(corners) {
+  const startX = (corners[0].x + corners[3].x) / 2;
+  const startY = (corners[0].y + corners[3].y) / 2;
+  const endX = (corners[1].x + corners[2].x) / 2;
+  const endY = (corners[1].y + corners[2].y) / 2;
+  const width = dist(corners[0].x, corners[0].y, corners[3].x, corners[3].y);
+
+  return { x1: startX, y1: startY, x2: endX, y2: endY, width };
+}
+
+function drawRoundedWallShape(x1, y1, x2, y2, width, { fillColor = null, strokeColor = null, strokeWidth = 1 } = {}) {
+  const centerX = (x1 + x2) / 2;
+  const centerY = (y1 + y2) / 2;
+  const length = dist(x1, y1, x2, y2);
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  const radius = Math.min(width * 0.33, width / 2, length / 2);
+
+  push();
+  translate(centerX, centerY);
+  rotate(angle);
+  rectMode(CENTER);
+  if (fillColor) {
+    fill(fillColor);
+  } else {
+    noFill();
+  }
+
+  if (strokeColor) {
+    stroke(strokeColor);
+    strokeWeight(strokeWidth);
+  } else {
+    noStroke();
+  }
+
+  rect(0, 0, length, width, radius);
+  pop();
+}
+
+function getTopSideRevealDistance() {
+  return sliderTopSideReveal ? Number(sliderTopSideReveal.value()) : DEFAULT_TOP_SIDE_REVEAL_DISTANCE;
+}
+
+function getClosestPointOnSegment(pointX, pointY, startX, startY, endX, endY) {
+  const segmentX = endX - startX;
+  const segmentY = endY - startY;
+  const segmentLengthSquared = (segmentX * segmentX) + (segmentY * segmentY);
+
+  if (segmentLengthSquared <= 0.0001) {
+    return { x: startX, y: startY, t: 0 };
+  }
+
+  const projectedT = (
+    ((pointX - startX) * segmentX) +
+    ((pointY - startY) * segmentY)
+  ) / segmentLengthSquared;
+  const t = clamp(projectedT, 0, 1);
+
+  return {
+    x: startX + (segmentX * t),
+    y: startY + (segmentY * t),
+    t,
+  };
+}
+
 function getTopWallCap(wall, depthStrength) {
   const baseCorners = wall.getCorners();
-  const centerX = (wall.x1 + wall.x2) / 2;
-  const centerY = (wall.y1 + wall.y2) / 2;
-  const dirX = centerX - particle.pos.x;
-  const dirY = centerY - particle.pos.y;
-  const distance = Math.hypot(dirX, dirY) || 1;
-  const distanceRatio = clamp(distance / Math.hypot(worldW, worldH), 0, 1);
-  const offsetMagnitude = lerp(TOP_EXTRUSION_MIN, TOP_EXTRUSION_MAX, depthStrength) * lerp(1.2, 0.55, distanceRatio);
-  const offsetX = (dirX / distance) * offsetMagnitude;
-  const offsetY = (dirY / distance) * offsetMagnitude;
+  const centerlineAnchor = getClosestPointOnSegment(
+    particle.pos.x,
+    particle.pos.y,
+    wall.x1,
+    wall.y1,
+    wall.x2,
+    wall.y2
+  );
+  const wallAxisX = wall.x2 - wall.x1;
+  const wallAxisY = wall.y2 - wall.y1;
+  const wallAxisLength = Math.hypot(wallAxisX, wallAxisY) || 1;
+  let normalX = -wallAxisY / wallAxisLength;
+  let normalY = wallAxisX / wallAxisLength;
+  let normalDistance = (
+    ((centerlineAnchor.x - particle.pos.x) * normalX) +
+    ((centerlineAnchor.y - particle.pos.y) * normalY)
+  );
+
+  if (normalDistance < 0) {
+    normalX *= -1;
+    normalY *= -1;
+    normalDistance *= -1;
+  }
+
+  const sideRevealDistance = Math.max(1, getTopSideRevealDistance());
+  const sideRevealBase = clamp(normalDistance / sideRevealDistance, 0, 1);
+  const sideReveal = sideRevealBase * sideRevealBase * (3 - (2 * sideRevealBase));
+  const distanceRatio = clamp(normalDistance / Math.min(worldW, worldH), 0, 1);
+  const offsetMagnitude = (
+    lerp(TOP_EXTRUSION_MIN, TOP_EXTRUSION_MAX, depthStrength) *
+    lerp(1.2, 0.55, distanceRatio) *
+    sideReveal
+  );
+  const extrusionDirX = normalX;
+  const extrusionDirY = normalY;
+  const offsetX = extrusionDirX * offsetMagnitude;
+  const offsetY = extrusionDirY * offsetMagnitude;
   const scaleAmount = 1 + (TOP_CAP_SCALE_MAX * depthStrength * lerp(1.15, 0.7, distanceRatio));
 
-  return baseCorners.map((corner) => ({
-    x: centerX + offsetX + ((corner.x - centerX) * scaleAmount),
-    y: centerY + offsetY + ((corner.y - centerY) * scaleAmount),
-  }));
+  return {
+    capCorners: baseCorners.map((corner) => ({
+      x: centerlineAnchor.x + offsetX + ((corner.x - centerlineAnchor.x) * scaleAmount),
+      y: centerlineAnchor.y + offsetY + ((corner.y - centerlineAnchor.y) * scaleAmount),
+    })),
+    extrusionDirX,
+    extrusionDirY,
+  };
 }
 
 function getTopFaceDepth(points) {
@@ -1547,29 +1684,8 @@ function getTopFaceDepth(points) {
   return dist(centerX, centerY, particle.pos.x, particle.pos.y);
 }
 
-function getTopLongFaceStartIndex(baseCorners) {
-  const longEdgeStartIndices = [0, 2];
-  let chosenStartIndex = longEdgeStartIndices[0];
-  let nearestDistance = Infinity;
-
-  for (const startIndex of longEdgeStartIndices) {
-    const nextIndex = (startIndex + 1) % baseCorners.length;
-    const midpointX = (baseCorners[startIndex].x + baseCorners[nextIndex].x) / 2;
-    const midpointY = (baseCorners[startIndex].y + baseCorners[nextIndex].y) / 2;
-    const edgeDistance = dist(midpointX, midpointY, particle.pos.x, particle.pos.y);
-
-    if (edgeDistance < nearestDistance) {
-      nearestDistance = edgeDistance;
-      chosenStartIndex = startIndex;
-    }
-  }
-
-  return chosenStartIndex;
-}
-
 function buildTopExtrudedWallFaces(wall, depthStrength) {
   const baseCorners = wall.getCorners();
-  const capCorners = getTopWallCap(wall, depthStrength);
   const wallColorConfig = getWallColorConfig();
   const sideFill = color(
     wallColorConfig.near.r,
@@ -1577,34 +1693,36 @@ function buildTopExtrudedWallFaces(wall, depthStrength) {
     wallColorConfig.near.b,
     255
   );
-  const topFill = wall.isExterior ? color(88, 120, 94, 255) : color(88, 120, 94, 255);
-  const longFaceStartIndex = getTopLongFaceStartIndex(baseCorners);
-  const longFaceNextIndex = (longFaceStartIndex + 1) % baseCorners.length;
+  const topFill = color(
+    wallColorConfig.far.r,
+    wallColorConfig.far.g,
+    wallColorConfig.far.b,
+    255
+  );
+  const topCap = getTopWallCap(wall, depthStrength);
+  const capCorners = topCap.capCorners;
   const faces = [];
-  const mainFacePoints = [
-    baseCorners[longFaceStartIndex],
-    baseCorners[longFaceNextIndex],
-    capCorners[longFaceNextIndex],
-    capCorners[longFaceStartIndex],
-  ];
+  const sideVisibilityThreshold = 0.5;
 
-  faces.push({
-    points: mainFacePoints,
-    fillColor: sideFill,
-    strokeColor: null,
-    strokeWidth: 0,
-    depth: getTopFaceDepth(mainFacePoints),
-    kind: 'side',
-  });
-
-  const shortFaceStartIndices = [
-    (longFaceStartIndex + 1) % baseCorners.length,
-    (longFaceStartIndex + 3) % baseCorners.length,
-  ];
-
-  for (const startIndex of shortFaceStartIndices) {
+  for (let startIndex = 0; startIndex < baseCorners.length; startIndex++) {
     const nextIndex = (startIndex + 1) % baseCorners.length;
-    const shortFacePoints = [
+    const edgeDX = baseCorners[nextIndex].x - baseCorners[startIndex].x;
+    const edgeDY = baseCorners[nextIndex].y - baseCorners[startIndex].y;
+    const edgeLength = Math.hypot(edgeDX, edgeDY) || 1;
+    const outwardX = edgeDY / edgeLength;
+    const outwardY = -edgeDX / edgeLength;
+    const midpointX = (baseCorners[startIndex].x + baseCorners[nextIndex].x) / 2;
+    const midpointY = (baseCorners[startIndex].y + baseCorners[nextIndex].y) / 2;
+    const facingAmount = (
+      ((particle.pos.x - midpointX) * outwardX) +
+      ((particle.pos.y - midpointY) * outwardY)
+    );
+
+    if (facingAmount <= sideVisibilityThreshold) {
+      continue;
+    }
+
+    const sideFacePoints = [
       baseCorners[startIndex],
       baseCorners[nextIndex],
       capCorners[nextIndex],
@@ -1612,11 +1730,11 @@ function buildTopExtrudedWallFaces(wall, depthStrength) {
     ];
 
     faces.push({
-      points: shortFacePoints,
+      points: sideFacePoints,
       fillColor: sideFill,
       strokeColor: null,
       strokeWidth: 0,
-      depth: getTopFaceDepth(shortFacePoints),
+      depth: getTopFaceDepth(sideFacePoints),
       kind: 'side',
     });
   }
@@ -1628,12 +1746,22 @@ function buildTopExtrudedWallFaces(wall, depthStrength) {
     strokeWidth: 0,
     depth: getTopFaceDepth(capCorners) - 0.01,
     kind: 'cap',
+    roundedShape: getRoundedWallShapeFromCorners(capCorners),
   });
 
   return faces;
 }
 
 function drawTopFace(face) {
+  if (face.kind === 'cap' && face.roundedShape) {
+    drawRoundedWallShape(face.roundedShape.x1, face.roundedShape.y1, face.roundedShape.x2, face.roundedShape.y2, face.roundedShape.width, {
+      fillColor: face.fillColor,
+      strokeColor: face.strokeColor,
+      strokeWidth: face.strokeWidth,
+    });
+    return;
+  }
+
   if (face.strokeColor) {
     stroke(face.strokeColor);
     strokeWeight(face.strokeWidth);
@@ -1775,13 +1903,11 @@ function drawMiniMap() {
   stroke(210, 220, 235, alpha);
   noFill();
   for (const wall of walls) {
-    const corners = wall.getCorners();
-    quad(
-      corners[0].x, corners[0].y,
-      corners[1].x, corners[1].y,
-      corners[2].x, corners[2].y,
-      corners[3].x, corners[3].y
-    );
+    drawRoundedWallShape(wall.x1, wall.y1, wall.x2, wall.y2, wall.width, {
+      fillColor: null,
+      strokeColor: color(210, 220, 235, alpha),
+      strokeWidth: 2 / miniScale,
+    });
   }
 
   noStroke();

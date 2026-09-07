@@ -43,7 +43,7 @@ Quick parameter keys:
 - `5` depth pad X
 - `6` depth pad Y
 - `7` catnip count
-- `8` interior wall width
+- `8` interior wall size
 - `9` wall roundness
 - `0` top depth
 
