@@ -51,6 +51,19 @@ var sliderFishEye;
 var sliderRadius;
 var sliderEscape;
 
+var allEngineSliders = [];
+var selectedSliderIndex = 0;
+var autoSlideState = {
+  active: false,
+  direction: 0,
+  sliderObj: null,
+  intervalId: null
+};
+var tapHistory = {
+  ArrowLeft: [],
+  ArrowRight: []
+};
+
 const orderMagnitudes = [0.01, 0.1, 1, 10, 100];
 var sliderMagnitude = 1;
 
@@ -241,6 +254,7 @@ function setup() {
   sliderEscape.input(onEscapeChanged);
 
   updateSliderSteps();
+  initEngineSliders();
 
   window.addEventListener('resize', windowResized);
   window.addEventListener('keydown', onGlobalKeyDown);
@@ -298,11 +312,193 @@ function updateSliderSteps() {
   if (magBadge) magBadge.textContent = `${sliderMagnitude}x`;
 }
 
+function initEngineSliders() {
+  allEngineSliders = [
+    { index: 0, name: 'FOV', slider: sliderFOV, base: 1, onInput: onFOVChanged },
+    { index: 1, name: 'Walls', slider: sliderWall, base: 1, onInput: onWallsChanged },
+    { index: 2, name: 'Density', slider: sliderDensity, base: 0.05, onInput: onDensityChanged },
+    { index: 3, name: 'LOD Dist', slider: sliderThreshold, base: 25, onInput: onLODChanged },
+    { index: 4, name: 'Max Chunk', slider: sliderMaxChunk, base: 1, onInput: onLODChanged },
+    { index: 5, name: 'Split', slider: sliderSplit, base: 10, onInput: onSplitChanged },
+    { index: 6, name: 'Curve', slider: sliderCurve, base: 1, onInput: onCurveChanged },
+    { index: 7, name: 'Gravity', slider: sliderGravity, base: 10, onInput: onGravityChanged },
+    { index: 8, name: 'Fish Eye', slider: sliderFishEye, base: 0.05, onInput: onFishEyeChanged },
+    { index: 9, name: 'Singularity', slider: sliderRadius, base: 1, onInput: onRadiusChanged },
+    { index: 10, name: 'Escape Drift', slider: sliderEscape, base: 0.05, onInput: onEscapeChanged }
+  ];
+
+  allEngineSliders.forEach((item, idx) => {
+    if (item.slider && item.slider.elt) {
+      item.slider.elt.addEventListener('focus', () => { selectedSliderIndex = idx; });
+      item.slider.elt.addEventListener('mousedown', () => {
+        stopAutoSlide();
+        selectedSliderIndex = idx;
+      });
+      item.slider.elt.addEventListener('input', () => {
+        stopAutoSlide();
+        selectedSliderIndex = idx;
+      });
+    }
+  });
+}
+
+function getActiveSliderObj() {
+  if (document.activeElement) {
+    const idx = allEngineSliders.findIndex(s => s.slider && s.slider.elt === document.activeElement);
+    if (idx !== -1) {
+      selectedSliderIndex = idx;
+      return allEngineSliders[idx];
+    }
+  }
+  if (selectedSliderIndex < 0 || selectedSliderIndex >= allEngineSliders.length) {
+    selectedSliderIndex = 0;
+  }
+  return allEngineSliders[selectedSliderIndex];
+}
+
+function stepSlider(sliderObj, direction) {
+  if (!sliderObj || !sliderObj.slider || !sliderObj.slider.elt) return;
+  const elt = sliderObj.slider.elt;
+  const minVal = parseFloat(elt.min);
+  const maxVal = parseFloat(elt.max);
+  const step = parseFloat(elt.step) || Math.max(0.001, +(sliderObj.base * sliderMagnitude).toPrecision(4));
+  let currVal = parseFloat(elt.value);
+
+  let nextVal = currVal + direction * step;
+  if (nextVal >= maxVal) {
+    nextVal = maxVal;
+    if (autoSlideState.active && autoSlideState.sliderObj === sliderObj) {
+      stopAutoSlide();
+    }
+  } else if (nextVal <= minVal) {
+    nextVal = minVal;
+    if (autoSlideState.active && autoSlideState.sliderObj === sliderObj) {
+      stopAutoSlide();
+    }
+  }
+
+  const stepStr = step.toString();
+  const decimals = stepStr.includes('.') ? stepStr.split('.')[1].length : 0;
+  nextVal = parseFloat(nextVal.toFixed(Math.max(2, decimals)));
+
+  sliderObj.slider.value(nextVal);
+  elt.value = nextVal;
+  if (sliderObj.onInput) {
+    sliderObj.onInput();
+  }
+}
+
+function startAutoSlide(sliderObj, direction) {
+  stopAutoSlide();
+  if (!sliderObj) return;
+
+  autoSlideState.active = true;
+  autoSlideState.direction = direction;
+  autoSlideState.sliderObj = sliderObj;
+
+  autoSlideState.intervalId = setInterval(() => {
+    if (!autoSlideState.active) return;
+    stepSlider(sliderObj, direction);
+  }, 50);
+}
+
+function stopAutoSlide() {
+  if (autoSlideState.active || autoSlideState.intervalId) {
+    autoSlideState.active = false;
+    autoSlideState.direction = 0;
+    if (autoSlideState.intervalId) {
+      clearInterval(autoSlideState.intervalId);
+      autoSlideState.intervalId = null;
+    }
+  }
+}
+
 function onGlobalKeyDown(e) {
-  // Press 'I' once to increase incremental value by one order of magnitude
+  if (e.target && (e.target.tagName === 'INPUT' && (e.target.type === 'text' || e.target.type === 'color'))) return;
+
+  // If auto-slide is active, any key other than WASD cancels auto-slide immediately
+  const isWasd = (e.key === 'w' || e.key === 'W' || e.key === 'a' || e.key === 'A' || e.key === 's' || e.key === 'S' || e.key === 'd' || e.key === 'D');
+  if (autoSlideState.active && !isWasd) {
+    stopAutoSlide();
+    if (e.key === 'i' || e.key === 'I') {
+      cycleSliderMagnitude();
+    }
+    return;
+  }
+
+  // 'I' key cycles magnitude
   if (e.key === 'i' || e.key === 'I') {
-    if (e.target && (e.target.tagName === 'INPUT' && (e.target.type === 'text' || e.target.type === 'color'))) return;
     cycleSliderMagnitude();
+    return;
+  }
+
+  // Tab key cycles active slider and focuses it
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    stopAutoSlide();
+    if (e.shiftKey) {
+      selectedSliderIndex = (selectedSliderIndex - 1 + allEngineSliders.length) % allEngineSliders.length;
+    } else {
+      selectedSliderIndex = (selectedSliderIndex + 1) % allEngineSliders.length;
+    }
+    const target = allEngineSliders[selectedSliderIndex];
+    if (target && target.slider && target.slider.elt) {
+      target.slider.elt.focus();
+    }
+    return;
+  }
+
+  // Up/Down arrows: switch active slider
+  if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    stopAutoSlide();
+    selectedSliderIndex = (selectedSliderIndex - 1 + allEngineSliders.length) % allEngineSliders.length;
+    const target = allEngineSliders[selectedSliderIndex];
+    if (target && target.slider && target.slider.elt) {
+      target.slider.elt.focus();
+    }
+    return;
+  }
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    stopAutoSlide();
+    selectedSliderIndex = (selectedSliderIndex + 1) % allEngineSliders.length;
+    const target = allEngineSliders[selectedSliderIndex];
+    if (target && target.slider && target.slider.elt) {
+      target.slider.elt.focus();
+    }
+    return;
+  }
+
+  // Left/Right arrows: manual step + triple-tap detection for auto-sliding
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    e.preventDefault();
+    const target = getActiveSliderObj();
+    const direction = (e.key === 'ArrowRight') ? 1 : -1;
+    stepSlider(target, direction);
+
+    // Ignore OS key repeats while holding down
+    if (e.repeat) return;
+
+    const keyName = e.key;
+    const now = Date.now();
+    let history = tapHistory[keyName] || [];
+    // Keep taps from the last 800ms
+    history = history.filter(t => now - t <= 800);
+    history.push(now);
+    tapHistory[keyName] = history;
+
+    // Check if 3 quick presses in a row (consecutive intervals <= 400ms)
+    if (history.length >= 3) {
+      const t1 = history[history.length - 3];
+      const t2 = history[history.length - 2];
+      const t3 = history[history.length - 1];
+      if ((t2 - t1 <= 400) && (t3 - t2 <= 400)) {
+        tapHistory[keyName] = [];
+        startAutoSlide(target, direction);
+      }
+    }
+    return;
   }
 }
 
@@ -696,6 +892,10 @@ function handleInput() {
 }
 
 function mousePressed() {
+  if (autoSlideState && autoSlideState.active) {
+    stopAutoSlide();
+  }
+
   // Restore keyboard focus to canvas whenever clicking anywhere on canvas
   if (document.activeElement && document.activeElement.blur && document.activeElement !== document.body) {
     document.activeElement.blur();
@@ -870,30 +1070,49 @@ function renderHUD() {
   // Left slider labels background panel (contains all 11 sliders + step multiplier)
   fill(10, 15, 25, 225);
   rectMode(CORNER);
-  rect(5, 2, 345, 254, 6);
+  rect(5, 2, 370, 254, 8);
 
-  fill(220);
-  text(`FOV: ${sliderFOV.value()}°`, 180, 18);
-  text(`Walls: ${sliderWall.value()}`, 180, 38);
-  const density = sliderDensity.value();
-  text(`Density: ${density.toFixed(1)} rays/° (${(1/density).toFixed(2)}°)`, 180, 58);
-  text(`LOD Dist: ${sliderThreshold.value()}px`, 180, 78);
-  text(`Max Chunk: ${sliderMaxChunk.value()}x`, 180, 98);
-  text(`Split: ${sliderSplit.value()}% Top / ${100 - sliderSplit.value()}% 3D`, 180, 118);
-  const curveVal = sliderCurve.value();
-  text(`Curve: ${curveVal > 0 ? '+' : ''}${curveVal}°`, 180, 138);
-  const gravVal = sliderGravity.value();
-  text(`Gravity: ${gravVal > 0 ? gravVal + ' M' : '0 (Off)'}`, 180, 158);
-  const fishVal = sliderFishEye.value();
-  text(`Fish Eye: ${Math.round(fishVal * 100)}%${fishVal === 0 ? ' (Flat)' : ''}`, 180, 178);
-  const radVal = sliderRadius.value();
-  text(`Singularity: ${radVal}px${radVal === 0 ? ' (0px: Orbit Free)' : ' (Eats Rays)'}`, 180, 198);
-  const escVal = sliderEscape.value();
-  text(`Escape Drift: ${escVal.toFixed(2)}${escVal === 0 ? ' (Closed)' : ' (Spirals Out)'}`, 180, 218);
+  const sliderLabels = [
+    `FOV: ${sliderFOV.value()}°`,
+    `Walls: ${sliderWall.value()}`,
+    `Density: ${sliderDensity.value().toFixed(1)} rays/° (${(1/sliderDensity.value()).toFixed(2)}°)`,
+    `LOD Dist: ${sliderThreshold.value()}px`,
+    `Max Chunk: ${sliderMaxChunk.value()}x`,
+    `Split: ${sliderSplit.value()}% Top / ${100 - sliderSplit.value()}% 3D`,
+    `Curve: ${sliderCurve.value() > 0 ? '+' : ''}${sliderCurve.value()}°`,
+    `Gravity: ${sliderGravity.value() > 0 ? sliderGravity.value() + ' M' : '0 (Off)'}`,
+    `Fish Eye: ${Math.round(sliderFishEye.value() * 100)}%${sliderFishEye.value() === 0 ? ' (Flat)' : ''}`,
+    `Singularity: ${sliderRadius.value()}px${sliderRadius.value() === 0 ? ' (0px: Orbit Free)' : ' (Eats Rays)'}`,
+    `Escape Drift: ${sliderEscape.value().toFixed(2)}${sliderEscape.value() === 0 ? ' (Closed)' : ' (Spirals Out)'}`
+  ];
 
-  // Magnitude indicator ('I' key)
-  fill(55, 255, 225);
-  text(`Step: ${sliderMagnitude}x  [Press 'I' to cycle 0.01x-100x]`, 180, 238);
+  for (let idx = 0; idx < sliderLabels.length; idx++) {
+    const yPos = 18 + idx * 20;
+    const isSelected = (idx === selectedSliderIndex);
+    const isAutoRunning = (autoSlideState.active && autoSlideState.sliderObj && autoSlideState.sliderObj.index === idx);
+
+    if (isAutoRunning) {
+      const pulse = (Math.floor(millis() / 200) % 2 === 0);
+      fill(pulse ? color(255, 115, 26) : color(55, 255, 225));
+      text(`${autoSlideState.direction > 0 ? '▶▶' : '◀◀'} ${sliderLabels[idx]}`, 172, yPos);
+    } else if (isSelected) {
+      fill(55, 255, 225);
+      text(`▶ ${sliderLabels[idx]}`, 172, yPos);
+    } else {
+      fill(220);
+      text(sliderLabels[idx], 180, yPos);
+    }
+  }
+
+  // Footer status indicator
+  if (autoSlideState.active && autoSlideState.sliderObj) {
+    const pulse = (Math.floor(millis() / 200) % 2 === 0);
+    fill(pulse ? color(255, 115, 26) : color(55, 255, 225));
+    text(`⚡ AUTO ${autoSlideState.direction > 0 ? '▶▶' : '◀◀'} [${autoSlideState.sliderObj.name}]  (Key/Click to stop)`, 180, 238);
+  } else {
+    fill(55, 255, 225);
+    text(`Step: ${sliderMagnitude}x  [3x◀/▶: Auto-Run | I: Step | Tab]`, 180, 238);
+  }
 
   // Right diagnostics panel (anchored before the ⚙ Settings button)
   const rightX = width - 130;
