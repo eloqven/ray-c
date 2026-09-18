@@ -96,6 +96,9 @@
       border-radius: 12px;
       width: 90%;
       max-width: 440px;
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
       box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7), 0 0 20px rgba(55, 255, 225, 0.15);
       overflow: hidden;
       animation: modalSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
@@ -112,6 +115,7 @@
       padding: 16px 20px;
       background: rgba(255, 255, 255, 0.03);
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      flex-shrink: 0;
     }
     .modal-header h3 {
       margin: 0;
@@ -140,6 +144,8 @@
       display: flex;
       flex-direction: column;
       gap: 18px;
+      overflow-y: auto;
+      flex: 1;
     }
     .setting-item {
       display: flex;
@@ -352,6 +358,16 @@
           <input type="range" id="modal-split-slider" min="10" max="90" step="10" value="50" style="width: 100%; margin-top: 8px;">
         </div>
 
+        <!-- Setting: Wall Count (Interior Obstacles) -->
+        <div class="setting-item">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label for="modal-walls-slider">Wall Count (Interior Obstacles)</label>
+            <span id="modal-walls-label" style="font-size: 13px; color: #37ffe1; font-weight: 600;">6 Walls</span>
+          </div>
+          <p class="setting-desc">Number of obstacle walls (min 4 bounding perimeter walls). In game, press <kbd style="background: #222d3d; padding: 2px 6px; border-radius: 4px; border: 1px solid #4a5568; color: #fff;">Numpad +</kbd> / <kbd style="background: #222d3d; padding: 2px 6px; border-radius: 4px; border: 1px solid #4a5568; color: #fff;">Numpad -</kbd> to increment/decrement:</p>
+          <input type="range" id="modal-walls-slider" min="4" max="25" step="1" value="6" style="width: 100%; margin-top: 8px;">
+        </div>
+
         <!-- Setting 2: Pair of Colors -->
         <div class="setting-item">
           <label>Wall Depth Gradient (Close vs Far Color)</label>
@@ -437,11 +453,17 @@
         <!-- Step Magnitude Controller -->
         <div class="setting-item" style="background: rgba(55, 255, 225, 0.05); padding: 10px; border-radius: 8px; border: 1px solid rgba(55, 255, 225, 0.2);">
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <label>Slider Step Magnitude ('I' Key)</label>
+            <label>Slider Step Magnitude (Shift + 1..5)</label>
             <span id="modal-step-badge" style="font-size: 13px; color: #37ffe1; font-weight: 700; background: rgba(55, 255, 225, 0.15); padding: 2px 8px; border-radius: 4px;">1x</span>
           </div>
-          <p class="setting-desc" style="margin-top: 4px;">Pressing <kbd style="background: #222d3d; padding: 2px 6px; border-radius: 4px; border: 1px solid #4a5568; color: #fff;">I</kbd> cycles slider sensitivity by orders of magnitude: 0.01x &rarr; 0.1x &rarr; 1x &rarr; 10x &rarr; 100x.</p>
-          <button id="btn-step-cycle" class="btn btn-secondary" style="margin-top: 8px; width: 100%;">⚡ Cycle Magnitude Multiplier</button>
+          <p class="setting-desc" style="margin-top: 4px;">Use <kbd style="background: #222d3d; padding: 2px 6px; border-radius: 4px; border: 1px solid #4a5568; color: #fff;">Shift+1..5</kbd> to select stepping precision:</p>
+          <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 8px;">
+            <button class="btn btn-secondary btn-mag" data-mag="0.01" style="padding: 6px 2px; font-size: 11px;">⇧1: 0.01x</button>
+            <button class="btn btn-secondary btn-mag" data-mag="0.1" style="padding: 6px 2px; font-size: 11px;">⇧2: 0.1x</button>
+            <button class="btn btn-secondary btn-mag" data-mag="1" style="padding: 6px 2px; font-size: 11px;">⇧3: 1x</button>
+            <button class="btn btn-secondary btn-mag" data-mag="10" style="padding: 6px 2px; font-size: 11px;">⇧4: 10x</button>
+            <button class="btn btn-secondary btn-mag" data-mag="0.001" style="padding: 6px 2px; font-size: 11px;">⇧5: 0.001x</button>
+          </div>
         </div>
 
         <!-- Experiment Presets / Links -->

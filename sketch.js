@@ -41,7 +41,6 @@ var scene3DH;   // 3D Projection Height (Bottom half)
 var eyesDist = [];
 
 var sliderFOV;
-var sliderWall;
 var sliderDensity;
 var sliderThreshold;
 var sliderMaxChunk;
@@ -51,6 +50,7 @@ var sliderGravity;
 var sliderFishEye;
 var sliderRadius;
 var sliderEscape;
+var sliderOverflow;
 
 var allEngineSliders = [];
 var selectedSliderIndex = 0;
@@ -65,7 +65,7 @@ var tapHistory = {
   ArrowRight: []
 };
 
-const orderMagnitudes = [0.01, 0.1, 1, 10, 100];
+const orderMagnitudes = [0.01, 0.1, 1, 10, 0.001];
 var sliderMagnitude = 1;
 
 var averageFPS = 60;
@@ -189,71 +189,71 @@ function setup() {
   initBoundaries();
   initWalls(settings.wallCount);
 
-  // Control 1: FOV (supports full 0° to 721° wrap-around quirk)
+  // Control 1 (Key 1): FOV (0° to 721°)
   sliderFOV = createSlider(0, 721, settings.fov, 1);
   sliderFOV.position(10, 5);
   styleSlider(sliderFOV);
   sliderFOV.input(onFOVChanged);
 
-  // Control 2: Wall Count
-  sliderWall = createSlider(4, 14, settings.wallCount, 1);
-  sliderWall.position(10, 25);
-  styleSlider(sliderWall);
-  sliderWall.input(onWallsChanged);
-
-  // Control 3: Ray Density (0.1 to 3.0 rays per degree)
+  // Control 2 (Key 2): Ray Density (0.1 to 3.0 rays per degree)
   sliderDensity = createSlider(0.1, 3.0, settings.density, 0.05);
-  sliderDensity.position(10, 45);
+  sliderDensity.position(10, 25);
   styleSlider(sliderDensity);
   sliderDensity.input(onDensityChanged);
 
-  // Control 4: LOD Distance Threshold (where chunky pixels start)
+  // Control 3 (Key 3): LOD Distance Threshold (100 to 2500)
   sliderThreshold = createSlider(100, 2500, settings.lodThreshold, 25);
-  sliderThreshold.position(10, 65);
+  sliderThreshold.position(10, 45);
   styleSlider(sliderThreshold);
   sliderThreshold.input(onLODChanged);
 
-  // Control 5: Max Chunk Size for far pixels (1x - 16x width)
+  // Control 4 (Key 4): Max Chunk Size (1x - 16x width)
   sliderMaxChunk = createSlider(1, 16, settings.maxChunk, 1);
-  sliderMaxChunk.position(10, 85);
+  sliderMaxChunk.position(10, 65);
   styleSlider(sliderMaxChunk);
   sliderMaxChunk.input(onLODChanged);
 
-  // Control 6: Screen Split (10% to 90% in 10% steps)
+  // Control 5 (Key 5): Screen Split (10% to 90%)
   sliderSplit = createSlider(10, 90, settings.splitPercent, 10);
-  sliderSplit.position(10, 105);
+  sliderSplit.position(10, 85);
   styleSlider(sliderSplit);
   sliderSplit.input(onSplitChanged);
 
-  // Control 7: Global Space Curvature (-60° to +60°)
+  // Control 6 (Key 6): Global Space Curvature (-60° to +60°)
   sliderCurve = createSlider(-60, 60, settings.globalCurve, 1);
-  sliderCurve.position(10, 125);
+  sliderCurve.position(10, 105);
   styleSlider(sliderCurve);
   sliderCurve.input(onCurveChanged);
 
-  // Control 8: Black Hole Gravity Mass (0 to 3000)
+  // Control 7 (Key 7): Black Hole Gravity Mass (0 to 3000)
   sliderGravity = createSlider(0, 3000, settings.gravityMass, 10);
-  sliderGravity.position(10, 145);
+  sliderGravity.position(10, 125);
   styleSlider(sliderGravity);
   sliderGravity.input(onGravityChanged);
 
-  // Control 9: Fish Eye Distortion (0.00 = Flat Rectilinear, 1.00 = Classic Fish Eye, 2.00 = Extreme Dome)
+  // Control 8 (Key 8): Fish Eye Distortion (0.00 to 2.00)
   sliderFishEye = createSlider(0.0, 2.0, settings.fishEye, 0.05);
-  sliderFishEye.position(10, 165);
+  sliderFishEye.position(10, 145);
   styleSlider(sliderFishEye);
   sliderFishEye.input(onFishEyeChanged);
 
-  // Control 10: Singularity / Event Horizon Radius (0px = purely orbiting orb, up to 40px eating horizon)
+  // Control 9 (Key 9): Singularity / Event Horizon Radius (0 to 40)
   sliderRadius = createSlider(0, 40, settings.singularityRadius, 1);
-  sliderRadius.position(10, 185);
+  sliderRadius.position(10, 165);
   styleSlider(sliderRadius);
   sliderRadius.input(onRadiusChanged);
 
-  // Control 11: Ray Inclination / Outward Spiral Escape (0.00 = orbit only, 1.00 = aggressive outward escape)
+  // Control 10 (Key 0): Ray Inclination / Outward Spiral Escape (0.00 to 1.00)
   sliderEscape = createSlider(0.0, 1.0, settings.escapeFactor, 0.05);
-  sliderEscape.position(10, 205);
+  sliderEscape.position(10, 185);
   styleSlider(sliderEscape);
   sliderEscape.input(onEscapeChanged);
+
+  // Control 11 (Key -): Top Wall Overflow Opacity Gradient (0.00 to 1.00)
+  sliderOverflow = createSlider(0.0, 1.0, settings.overflowOpacity !== undefined ? settings.overflowOpacity : 0.35, 0.05);
+  sliderOverflow.position(10, 205);
+  styleSlider(sliderOverflow);
+  sliderOverflow.input(onOverflowChanged);
 
   updateSliderSteps();
   initEngineSliders();
@@ -263,19 +263,20 @@ function setup() {
   initModalListeners();
 }
 
-function cycleSliderMagnitude() {
-  let idx = orderMagnitudes.indexOf(sliderMagnitude);
-  if (idx === -1) idx = 2;
-  idx = (idx + 1) % orderMagnitudes.length;
-  sliderMagnitude = orderMagnitudes[idx];
+function setSliderMagnitude(mag) {
+  if (!orderMagnitudes.includes(mag)) return;
+  sliderMagnitude = mag;
+  settings.magnitude = mag;
   updateSliderSteps();
   saveSettings();
+  const magBadge = document.getElementById('modal-step-badge');
+  if (magBadge) magBadge.textContent = `${sliderMagnitude}x`;
 }
 
 function updateSliderSteps() {
   const sliders = [
-    sliderFOV, sliderWall, sliderDensity, sliderThreshold, sliderMaxChunk,
-    sliderSplit, sliderCurve, sliderGravity, sliderFishEye, sliderRadius, sliderEscape
+    sliderFOV, sliderDensity, sliderThreshold, sliderMaxChunk,
+    sliderSplit, sliderCurve, sliderGravity, sliderFishEye, sliderRadius, sliderEscape, sliderOverflow
   ];
 
   for (let s of sliders) {
@@ -287,7 +288,7 @@ function updateSliderSteps() {
 
   // Update modal inputs to 'any' as well
   const modalSliders = [
-    'modal-split-slider', 'modal-curve-slider', 'modal-gravity-slider',
+    'modal-split-slider', 'modal-walls-slider', 'modal-curve-slider', 'modal-gravity-slider',
     'modal-fisheye-slider', 'modal-radius-slider', 'modal-escape-slider',
     'modal-overflow-slider'
   ];
@@ -304,17 +305,17 @@ function updateSliderSteps() {
 
 function initEngineSliders() {
   allEngineSliders = [
-    { index: 0, name: 'FOV', slider: sliderFOV, base: 1, onInput: onFOVChanged },
-    { index: 1, name: 'Walls', slider: sliderWall, base: 1, onInput: onWallsChanged },
-    { index: 2, name: 'Density', slider: sliderDensity, base: 0.05, onInput: onDensityChanged },
-    { index: 3, name: 'LOD Dist', slider: sliderThreshold, base: 25, onInput: onLODChanged },
-    { index: 4, name: 'Max Chunk', slider: sliderMaxChunk, base: 1, onInput: onLODChanged },
-    { index: 5, name: 'Split', slider: sliderSplit, base: 10, onInput: onSplitChanged },
-    { index: 6, name: 'Curve', slider: sliderCurve, base: 1, onInput: onCurveChanged },
-    { index: 7, name: 'Gravity', slider: sliderGravity, base: 10, onInput: onGravityChanged },
-    { index: 8, name: 'Fish Eye', slider: sliderFishEye, base: 0.05, onInput: onFishEyeChanged },
-    { index: 9, name: 'Singularity', slider: sliderRadius, base: 1, onInput: onRadiusChanged },
-    { index: 10, name: 'Escape Drift', slider: sliderEscape, base: 0.05, onInput: onEscapeChanged }
+    { index: 0, keyTag: '1', name: 'FOV', slider: sliderFOV, base: 1, onInput: onFOVChanged },
+    { index: 1, keyTag: '2', name: 'Density', slider: sliderDensity, base: 0.05, onInput: onDensityChanged },
+    { index: 2, keyTag: '3', name: 'LOD Dist', slider: sliderThreshold, base: 25, onInput: onLODChanged },
+    { index: 3, keyTag: '4', name: 'Max Chunk', slider: sliderMaxChunk, base: 1, onInput: onLODChanged },
+    { index: 4, keyTag: '5', name: 'Split', slider: sliderSplit, base: 10, onInput: onSplitChanged },
+    { index: 5, keyTag: '6', name: 'Curve', slider: sliderCurve, base: 1, onInput: onCurveChanged },
+    { index: 6, keyTag: '7', name: 'Gravity', slider: sliderGravity, base: 10, onInput: onGravityChanged },
+    { index: 7, keyTag: '8', name: 'Fish Eye', slider: sliderFishEye, base: 0.05, onInput: onFishEyeChanged },
+    { index: 8, keyTag: '9', name: 'Singularity', slider: sliderRadius, base: 1, onInput: onRadiusChanged },
+    { index: 9, keyTag: '0', name: 'Escape Drift', slider: sliderEscape, base: 0.05, onInput: onEscapeChanged },
+    { index: 10, keyTag: '-', name: 'Top Overflow', slider: sliderOverflow, base: 0.05, onInput: onOverflowChanged }
   ];
 
   allEngineSliders.forEach((item, idx) => {
@@ -331,6 +332,60 @@ function initEngineSliders() {
       });
     }
   });
+}
+
+function selectSliderByIndex(idx) {
+  if (idx < 0 || idx >= allEngineSliders.length) return;
+  stopAutoSlide();
+  selectedSliderIndex = idx;
+  const target = allEngineSliders[idx];
+  if (target && target.slider && target.slider.elt) {
+    target.slider.elt.focus();
+  }
+}
+
+function setWallCount(newWallCount) {
+  newWallCount = Math.max(4, parseInt(newWallCount, 10) || 4);
+  settings.wallCount = newWallCount;
+  saveSettings();
+
+  if (newWallCount > walls.length) {
+    for (let i = walls.length; i < newWallCount; i++) {
+      let x1 = random(sceneW);
+      let x2 = random(sceneW);
+      let y1 = random(sceneH);
+      let y2 = random(sceneH);
+      walls[i] = new Boundary(x1, y1, x2, y2);
+    }
+  } else if (newWallCount < walls.length) {
+    while (walls.length > newWallCount) {
+      walls.pop();
+    }
+  }
+
+  const modalWallSlider = document.getElementById('modal-walls-slider');
+  const modalWallLabel = document.getElementById('modal-walls-label');
+  if (modalWallSlider) modalWallSlider.value = newWallCount;
+  if (modalWallLabel) modalWallLabel.textContent = `${newWallCount} Walls`;
+}
+
+function changeWallCount(delta) {
+  const current = parseInt(settings.wallCount, 10) || 6;
+  setWallCount(current + delta);
+}
+
+function onOverflowChanged() {
+  if (!sliderOverflow) return;
+  const val = sliderOverflow.value();
+  settings.overflowOpacity = val;
+  saveSettings();
+  const modalOverflowSlider = document.getElementById('modal-overflow-slider');
+  const modalOverflowLabel = document.getElementById('modal-overflow-label');
+  if (modalOverflowSlider) modalOverflowSlider.value = val;
+  if (modalOverflowLabel) {
+    const pct = Math.round(val * 100);
+    modalOverflowLabel.textContent = `${pct}%${pct === 0 ? ' (Hidden in 2D View)' : ' (Gradient Fade)'}`;
+  }
 }
 
 function getActiveSliderObj() {
@@ -411,16 +466,77 @@ function onGlobalKeyDown(e) {
   const isWasd = (e.key === 'w' || e.key === 'W' || e.key === 'a' || e.key === 'A' || e.key === 's' || e.key === 'S' || e.key === 'd' || e.key === 'D');
   if (autoSlideState.active && !isWasd) {
     stopAutoSlide();
-    if (e.key === 'i' || e.key === 'I') {
-      cycleSliderMagnitude();
-    }
+  }
+
+  // Numpad +/- to increase/decrease wall count (min 4)
+  if (e.code === 'NumpadAdd' || (e.key === '+' && !e.shiftKey)) {
+    e.preventDefault();
+    stopAutoSlide();
+    changeWallCount(1);
+    return;
+  }
+  if (e.code === 'NumpadSubtract') {
+    e.preventDefault();
+    stopAutoSlide();
+    changeWallCount(-1);
     return;
   }
 
-  // 'I' key cycles magnitude
-  if (e.key === 'i' || e.key === 'I') {
-    cycleSliderMagnitude();
-    return;
+  // Shift + 1..5 for direct magnitude selection (0.01x, 0.1x, 1x, 10x, 0.001x)
+  if (e.shiftKey && !e.ctrlKey && !e.altKey) {
+    if (e.code === 'Digit1' || e.key === '!' || e.key === '1') {
+      e.preventDefault();
+      stopAutoSlide();
+      setSliderMagnitude(0.01);
+      return;
+    }
+    if (e.code === 'Digit2' || e.key === '@' || e.key === '2') {
+      e.preventDefault();
+      stopAutoSlide();
+      setSliderMagnitude(0.1);
+      return;
+    }
+    if (e.code === 'Digit3' || e.key === '#' || e.key === '3') {
+      e.preventDefault();
+      stopAutoSlide();
+      setSliderMagnitude(1);
+      return;
+    }
+    if (e.code === 'Digit4' || e.key === '$' || e.key === '4') {
+      e.preventDefault();
+      stopAutoSlide();
+      setSliderMagnitude(10);
+      return;
+    }
+    if (e.code === 'Digit5' || e.key === '%' || e.key === '5') {
+      e.preventDefault();
+      stopAutoSlide();
+      setSliderMagnitude(0.001);
+      return;
+    }
+  }
+
+  // Keys 1..0 and '-' to select and focus each main slider
+  if (!e.shiftKey && !e.ctrlKey && !e.altKey) {
+    const digitMap = {
+      Digit1: 0, '1': 0,
+      Digit2: 1, '2': 1,
+      Digit3: 2, '3': 2,
+      Digit4: 3, '4': 3,
+      Digit5: 4, '5': 4,
+      Digit6: 5, '6': 5,
+      Digit7: 6, '7': 6,
+      Digit8: 7, '8': 7,
+      Digit9: 8, '9': 8,
+      Digit0: 9, '0': 9,
+      Minus: 10, '-': 10
+    };
+    const targetIdx = digitMap[e.code] !== undefined ? digitMap[e.code] : digitMap[e.key];
+    if (targetIdx !== undefined && e.code !== 'NumpadSubtract') {
+      e.preventDefault();
+      selectSliderByIndex(targetIdx);
+      return;
+    }
   }
 
   // Tab key cycles active slider and focuses it
@@ -499,6 +615,8 @@ function initModalListeners() {
   const btnClose = document.getElementById('btn-modal-close');
   const modalSplitSlider = document.getElementById('modal-split-slider');
   const modalSplitLabel = document.getElementById('modal-split-label');
+  const modalWallsSlider = document.getElementById('modal-walls-slider');
+  const modalWallsLabel = document.getElementById('modal-walls-label');
   const closeColorInput = document.getElementById('close-color-input');
   const farColorInput = document.getElementById('far-color-input');
   const closeHexLabel = document.getElementById('close-hex-label');
@@ -515,7 +633,6 @@ function initModalListeners() {
   const modalEscapeLabel = document.getElementById('modal-escape-label');
   const modalOverflowSlider = document.getElementById('modal-overflow-slider');
   const modalOverflowLabel = document.getElementById('modal-overflow-label');
-  const btnStepCycle = document.getElementById('btn-step-cycle');
   const btnSaveRefresh = document.getElementById('btn-save-refresh');
   const btnApplyLive = document.getElementById('btn-apply-live');
   const btnResetDefaults = document.getElementById('btn-reset-defaults');
@@ -523,6 +640,8 @@ function initModalListeners() {
   function syncModalInputs() {
     if (modalSplitSlider) modalSplitSlider.value = settings.splitPercent;
     if (modalSplitLabel) modalSplitLabel.textContent = `${settings.splitPercent}% Top / ${100 - settings.splitPercent}% Bottom`;
+    if (modalWallsSlider) modalWallsSlider.value = settings.wallCount;
+    if (modalWallsLabel) modalWallsLabel.textContent = `${settings.wallCount} Walls`;
     if (closeColorInput) closeColorInput.value = settings.closeColor;
     if (farColorInput) farColorInput.value = settings.farColor;
     if (closeHexLabel) closeHexLabel.textContent = settings.closeColor.toUpperCase();
@@ -576,10 +695,19 @@ function initModalListeners() {
     });
   }
 
-  if (btnStepCycle) {
-    btnStepCycle.addEventListener('click', () => {
-      cycleSliderMagnitude();
-      syncModalInputs();
+  document.querySelectorAll('.btn-mag').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const mag = parseFloat(btn.dataset.mag);
+      if (mag) {
+        setSliderMagnitude(mag);
+      }
+    });
+  });
+
+  if (modalWallsSlider) {
+    modalWallsSlider.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value, 10);
+      setWallCount(val);
     });
   }
 
@@ -678,6 +806,7 @@ function initModalListeners() {
   if (btnSaveRefresh) {
     btnSaveRefresh.addEventListener('click', () => {
       if (modalSplitSlider) settings.splitPercent = parseInt(modalSplitSlider.value, 10);
+      if (modalWallsSlider) settings.wallCount = parseInt(modalWallsSlider.value, 10);
       if (closeColorInput) settings.closeColor = closeColorInput.value;
       if (farColorInput) settings.farColor = farColorInput.value;
       if (modalCurveSlider) settings.globalCurve = parseFloat(modalCurveSlider.value);
@@ -694,6 +823,7 @@ function initModalListeners() {
   if (btnApplyLive) {
     btnApplyLive.addEventListener('click', () => {
       if (modalSplitSlider) settings.splitPercent = parseInt(modalSplitSlider.value, 10);
+      if (modalWallsSlider) setWallCount(parseInt(modalWallsSlider.value, 10));
       if (closeColorInput) settings.closeColor = closeColorInput.value;
       if (farColorInput) settings.farColor = farColorInput.value;
       if (modalCurveSlider) settings.globalCurve = parseFloat(modalCurveSlider.value);
@@ -713,6 +843,7 @@ function initModalListeners() {
       if (sliderFishEye) sliderFishEye.value(settings.fishEye);
       if (sliderRadius) sliderRadius.value(settings.singularityRadius);
       if (sliderEscape) sliderEscape.value(settings.escapeFactor);
+      if (sliderOverflow) sliderOverflow.value(settings.overflowOpacity);
       applyLiveLayout();
       modal.classList.add('hidden');
     });
@@ -1128,17 +1259,17 @@ function renderHUD() {
   rect(5, 2, 370, 254, 8);
 
   const sliderLabels = [
-    `FOV: ${sliderFOV.value()}°`,
-    `Walls: ${sliderWall.value()}`,
-    `Density: ${sliderDensity.value().toFixed(1)} rays/° (${(1/sliderDensity.value()).toFixed(2)}°)`,
-    `LOD Dist: ${sliderThreshold.value()}px`,
-    `Max Chunk: ${sliderMaxChunk.value()}x`,
-    `Split: ${sliderSplit.value()}% Top / ${100 - sliderSplit.value()}% 3D`,
-    `Curve: ${sliderCurve.value() > 0 ? '+' : ''}${sliderCurve.value()}°`,
-    `Gravity: ${sliderGravity.value() > 0 ? sliderGravity.value() + ' M' : '0 (Off)'}`,
-    `Fish Eye: ${Math.round(sliderFishEye.value() * 100)}%${sliderFishEye.value() === 0 ? ' (Flat)' : ''}`,
-    `Singularity: ${sliderRadius.value()}px${sliderRadius.value() === 0 ? ' (0px: Orbit Free)' : ' (Eats Rays)'}`,
-    `Escape Drift: ${sliderEscape.value().toFixed(2)}${sliderEscape.value() === 0 ? ' (Closed)' : ' (Spirals Out)'}`
+    `[1] FOV: ${sliderFOV.value()}°`,
+    `[2] Density: ${sliderDensity.value().toFixed(1)}/° (${(1/sliderDensity.value()).toFixed(2)}°)`,
+    `[3] LOD Dist: ${sliderThreshold.value()}px`,
+    `[4] Max Chunk: ${sliderMaxChunk.value()}x`,
+    `[5] Split: ${sliderSplit.value()}% Top / ${100 - sliderSplit.value()}% 3D`,
+    `[6] Curve: ${sliderCurve.value() > 0 ? '+' : ''}${sliderCurve.value()}°`,
+    `[7] Gravity: ${sliderGravity.value() > 0 ? sliderGravity.value() + ' M' : '0 (Off)'}`,
+    `[8] Fish Eye: ${Math.round(sliderFishEye.value() * 100)}%${sliderFishEye.value() === 0 ? ' (Flat)' : ''}`,
+    `[9] Singularity: ${sliderRadius.value()}px${sliderRadius.value() === 0 ? ' (0px: Orbit)' : ' (Eats)'}`,
+    `[0] Escape Drift: ${sliderEscape.value().toFixed(2)}${sliderEscape.value() === 0 ? ' (Closed)' : ' (Spiral)'}`,
+    `[-] Overflow: ${Math.round(sliderOverflow.value() * 100)}%${sliderOverflow.value() === 0 ? ' (Hidden)' : ' (Fade)'}`
   ];
 
   for (let idx = 0; idx < sliderLabels.length; idx++) {
@@ -1166,27 +1297,29 @@ function renderHUD() {
     text(`⚡ AUTO ${autoSlideState.direction > 0 ? '▶▶' : '◀◀'} [${autoSlideState.sliderObj.name}]  (Key/Click to stop)`, 180, 238);
   } else {
     fill(55, 255, 225);
-    text(`Step: ${sliderMagnitude}x  [3x◀/▶: Auto-Run | I: Step | Tab]`, 180, 238);
+    text(`Step: ${sliderMagnitude}x  [Shift+1..5 | 1..0,- | Num +/-]`, 180, 238);
   }
 
   // Right diagnostics panel (anchored before the ⚙ Settings button)
   const rightX = width - 130;
   fill(10, 15, 25, 225);
   rectMode(CORNER);
-  rect(rightX - 240, 5, 240, 96, 6);
+  rect(rightX - 240, 5, 240, 114, 6);
 
   textAlign(RIGHT);
   fill(255);
   textSize(13);
   text(`Split: ${settings.splitPercent}% Top / ${100 - settings.splitPercent}% 3D`, rightX - 10, 22);
   fill(colorCloseRgb.r, colorCloseRgb.g, colorCloseRgb.b);
-  text(`FPS: ${averageFPS.toFixed(1)}`, rightX - 10, 40);
+  text(`FPS: ${averageFPS.toFixed(1)}`, rightX - 10, 39);
+  fill(55, 255, 225);
+  text(`Walls: ${settings.wallCount} [Numpad +/-]`, rightX - 10, 56);
   fill(220);
   const saved = Math.round((1 - currentSliceCount / (particle.rays.length || 1)) * 100);
-  text(`Slices: ${currentSliceCount} / ${particle.rays.length} (${saved}% saved)`, rightX - 10, 58);
+  text(`Slices: ${currentSliceCount} / ${particle.rays.length} (${saved}% saved)`, rightX - 10, 73);
   fill(55, 255, 225);
   textSize(11);
-  text(`⚡ Move: WASD Keys (Cross Walls)`, rightX - 10, 75);
-  text(`🌌 Drag Singularity / Alt+Click`, rightX - 10, 92);
+  text(`⚡ Move: WASD Keys (Cross Walls)`, rightX - 10, 90);
+  text(`🌌 Drag Singularity / Alt+Click`, rightX - 10, 107);
   pop();
 }
