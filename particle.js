@@ -231,9 +231,22 @@ class Particle {
         endShape();
       }
 
-      // Fish Eye perspective modulation:
-      const fishFactor = Math.cos(ray.relAngle) * (1.0 - fishEye) + 1.0 * fishEye;
-      const finalD = Math.max(1, totalDist * fishFactor);
+      // Fish Eye & Wide-Angle Perspective Modulation:
+      // Normalized angle across the current FOV [-1 to +1] from left margin to right margin
+      const halfFovRad = Math.max(0.001, (this.viewAngle * Math.PI) / 360);
+      const normAngle = constrain(ray.relAngle / halfFovRad, -1, 1);
+
+      // Smooth wide-angle projection curve: avoids clamping or flatlining at 90 deg across any FOV
+      const maxProjAngle = 1.32; // ~75.6 deg effective maximum curvature angle
+      const cosFactor = Math.cos(normAngle * maxProjAngle);
+
+      let fishFactor = 1.0;
+      if (fishEye <= 1.0) {
+        fishFactor = lerp(cosFactor, 1.0, fishEye);
+      } else {
+        fishFactor = lerp(1.0, 2.0 - cosFactor, fishEye - 1.0);
+      }
+      const finalD = Math.max(0.1, totalDist * fishFactor);
 
       scene[i] = finalD;
       hitTypes[i] = hitType;

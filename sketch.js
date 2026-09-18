@@ -811,7 +811,11 @@ function draw() {
     step = Math.min(step, scene.length - i);
 
     const sq = d * d;
-    const h = map(d, maxDist, 0, 0, scene3DH);
+    // Perspective wall projection with natural vertical overflow onto the 2D view (no vertical capping)
+    const nominalDist = maxDist * 0.40;
+    const h = (d >= nominalDist)
+      ? map(d, maxDist, nominalDist, 0, scene3DH * 0.68)
+      : (nominalDist / Math.max(10, d)) * (scene3DH * 0.68);
 
     const xStart = Math.floor(i * w);
     const xEnd = (i + step >= scene.length) ? sceneW : Math.floor((i + step) * w);
