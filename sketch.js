@@ -299,8 +299,9 @@ function updateSliderSteps() {
 }
 
 function onGlobalKeyDown(e) {
-  // Press Shift once to increase incremental value by one order of magnitude
-  if (e.key === 'Shift') {
+  // Press 'I' once to increase incremental value by one order of magnitude
+  if (e.key === 'i' || e.key === 'I') {
+    if (e.target && (e.target.tagName === 'INPUT' && (e.target.type === 'text' || e.target.type === 'color'))) return;
     cycleSliderMagnitude();
   }
 }
@@ -890,9 +891,9 @@ function renderHUD() {
   const escVal = sliderEscape.value();
   text(`Escape Drift: ${escVal.toFixed(2)}${escVal === 0 ? ' (Closed)' : ' (Spirals Out)'}`, 180, 218);
 
-  // Shift magnitude indicator
+  // Magnitude indicator ('I' key)
   fill(55, 255, 225);
-  text(`Step: ${sliderMagnitude}x  [Shift to cycle 0.01x-100x]`, 180, 238);
+  text(`Step: ${sliderMagnitude}x  [Press 'I' to cycle 0.01x-100x]`, 180, 238);
 
   // Right diagnostics panel (anchored before the ⚙ Settings button)
   const rightX = width - 130;
