@@ -17,6 +17,7 @@ const defaultSettings = {
   singularityX: 0.65,
   singularityY: 0.45,
   fishEye: 0.0,
+  overflowOpacity: 0.35,
   magnitude: 1
 };
 
@@ -109,6 +110,7 @@ function loadSettings() {
   if (settings.singularityX === undefined) settings.singularityX = defaultSettings.singularityX;
   if (settings.singularityY === undefined) settings.singularityY = defaultSettings.singularityY;
   if (settings.fishEye === undefined) settings.fishEye = defaultSettings.fishEye;
+  if (settings.overflowOpacity === undefined) settings.overflowOpacity = defaultSettings.overflowOpacity;
   if (settings.magnitude === undefined || !orderMagnitudes.includes(settings.magnitude)) {
     sliderMagnitude = 1;
   } else {
@@ -272,39 +274,27 @@ function cycleSliderMagnitude() {
 
 function updateSliderSteps() {
   const sliders = [
-    { slider: sliderFOV, base: 1 },
-    { slider: sliderWall, base: 1 },
-    { slider: sliderDensity, base: 0.05 },
-    { slider: sliderThreshold, base: 25 },
-    { slider: sliderMaxChunk, base: 1 },
-    { slider: sliderSplit, base: 10 },
-    { slider: sliderCurve, base: 1 },
-    { slider: sliderGravity, base: 10 },
-    { slider: sliderFishEye, base: 0.05 },
-    { slider: sliderRadius, base: 1 },
-    { slider: sliderEscape, base: 0.05 }
+    sliderFOV, sliderWall, sliderDensity, sliderThreshold, sliderMaxChunk,
+    sliderSplit, sliderCurve, sliderGravity, sliderFishEye, sliderRadius, sliderEscape
   ];
 
   for (let s of sliders) {
-    if (s.slider && s.slider.elt) {
-      const stepVal = Math.max(0.001, +(s.base * sliderMagnitude).toPrecision(4));
-      s.slider.elt.step = stepVal;
+    if (s && s.elt) {
+      // Set to 'any' so browser native sanitization NEVER snaps or resets values to min!
+      s.elt.step = 'any';
     }
   }
 
-  // Update modal inputs as well
+  // Update modal inputs to 'any' as well
   const modalSliders = [
-    { id: 'modal-split-slider', base: 10 },
-    { id: 'modal-curve-slider', base: 1 },
-    { id: 'modal-gravity-slider', base: 10 },
-    { id: 'modal-fisheye-slider', base: 0.05 },
-    { id: 'modal-radius-slider', base: 1 },
-    { id: 'modal-escape-slider', base: 0.05 }
+    'modal-split-slider', 'modal-curve-slider', 'modal-gravity-slider',
+    'modal-fisheye-slider', 'modal-radius-slider', 'modal-escape-slider',
+    'modal-overflow-slider'
   ];
-  for (let m of modalSliders) {
-    const el = document.getElementById(m.id);
+  for (let id of modalSliders) {
+    const el = document.getElementById(id);
     if (el) {
-      el.step = Math.max(0.001, +(m.base * sliderMagnitude).toPrecision(4));
+      el.step = 'any';
     }
   }
 
@@ -329,6 +319,7 @@ function initEngineSliders() {
 
   allEngineSliders.forEach((item, idx) => {
     if (item.slider && item.slider.elt) {
+      item.slider.elt.step = 'any';
       item.slider.elt.addEventListener('focus', () => { selectedSliderIndex = idx; });
       item.slider.elt.addEventListener('mousedown', () => {
         stopAutoSlide();
@@ -361,7 +352,7 @@ function stepSlider(sliderObj, direction) {
   const elt = sliderObj.slider.elt;
   const minVal = parseFloat(elt.min);
   const maxVal = parseFloat(elt.max);
-  const step = parseFloat(elt.step) || Math.max(0.001, +(sliderObj.base * sliderMagnitude).toPrecision(4));
+  const step = Math.max(0.001, +(sliderObj.base * sliderMagnitude).toPrecision(4));
   let currVal = parseFloat(elt.value);
 
   let nextVal = currVal + direction * step;
@@ -522,6 +513,8 @@ function initModalListeners() {
   const modalRadiusLabel = document.getElementById('modal-radius-label');
   const modalEscapeSlider = document.getElementById('modal-escape-slider');
   const modalEscapeLabel = document.getElementById('modal-escape-label');
+  const modalOverflowSlider = document.getElementById('modal-overflow-slider');
+  const modalOverflowLabel = document.getElementById('modal-overflow-label');
   const btnStepCycle = document.getElementById('btn-step-cycle');
   const btnSaveRefresh = document.getElementById('btn-save-refresh');
   const btnApplyLive = document.getElementById('btn-apply-live');
@@ -549,6 +542,12 @@ function initModalListeners() {
 
     if (modalEscapeSlider) modalEscapeSlider.value = settings.escapeFactor;
     if (modalEscapeLabel) modalEscapeLabel.textContent = `${settings.escapeFactor.toFixed(2)}${settings.escapeFactor === 0 ? ' (Closed Orbit)' : ' (Spiral Outward)'}`;
+
+    if (modalOverflowSlider) modalOverflowSlider.value = settings.overflowOpacity;
+    if (modalOverflowLabel) {
+      const pct = Math.round(settings.overflowOpacity * 100);
+      modalOverflowLabel.textContent = `${pct}%${pct === 0 ? ' (Hidden in 2D View)' : ' (Gradient Fade)'}`;
+    }
 
     const magBadge = document.getElementById('modal-step-badge');
     if (magBadge) magBadge.textContent = `${sliderMagnitude}x`;
@@ -666,6 +665,16 @@ function initModalListeners() {
     });
   }
 
+  if (modalOverflowSlider) {
+    modalOverflowSlider.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      settings.overflowOpacity = val;
+      const pct = Math.round(val * 100);
+      if (modalOverflowLabel) modalOverflowLabel.textContent = `${pct}%${pct === 0 ? ' (Hidden in 2D View)' : ' (Gradient Fade)'}`;
+      saveSettings();
+    });
+  }
+
   if (btnSaveRefresh) {
     btnSaveRefresh.addEventListener('click', () => {
       if (modalSplitSlider) settings.splitPercent = parseInt(modalSplitSlider.value, 10);
@@ -676,6 +685,7 @@ function initModalListeners() {
       if (modalFishEyeSlider) settings.fishEye = parseFloat(modalFishEyeSlider.value);
       if (modalRadiusSlider) settings.singularityRadius = parseFloat(modalRadiusSlider.value);
       if (modalEscapeSlider) settings.escapeFactor = parseFloat(modalEscapeSlider.value);
+      if (modalOverflowSlider) settings.overflowOpacity = parseFloat(modalOverflowSlider.value);
       saveSettings();
       window.location.reload();
     });
@@ -691,6 +701,7 @@ function initModalListeners() {
       if (modalFishEyeSlider) settings.fishEye = parseFloat(modalFishEyeSlider.value);
       if (modalRadiusSlider) settings.singularityRadius = parseFloat(modalRadiusSlider.value);
       if (modalEscapeSlider) settings.escapeFactor = parseFloat(modalEscapeSlider.value);
+      if (modalOverflowSlider) settings.overflowOpacity = parseFloat(modalOverflowSlider.value);
       if (singularity) {
         singularity.mass = settings.gravityMass;
         singularity.radius = settings.singularityRadius;
@@ -1022,32 +1033,76 @@ function draw() {
     const xEnd = (i + step >= scene.length) ? sceneW : Math.floor((i + step) * w);
     const colWidth = Math.max(1, xEnd - xStart);
     const topY = halfH - h / 2;
+    const bottomY = topY + h;
+    const overflowOpacity = (settings.overflowOpacity !== undefined) ? settings.overflowOpacity : 0.35;
 
     if (hitType === 'singularity') {
       // Event Horizon rendered in 3D: Pitch black void silhouette
-      fill(0, 0, 0);
-      rect(xStart, topY, colWidth, h);
+      if (topY >= 0) {
+        fill(0, 0, 0);
+        rect(xStart, topY, colWidth, h);
 
-      // Accretion halo photon ring along top and bottom edges
-      fill(55, 255, 225, 180);
-      rect(xStart, topY, colWidth, 2);
-      rect(xStart, topY + h - 2, colWidth, 2);
+        // Accretion halo photon ring along top and bottom edges
+        fill(55, 255, 225, 180);
+        rect(xStart, topY, colWidth, 2);
+        rect(xStart, topY + h - 2, colWidth, 2);
+      } else {
+        // Wall slice overflows into 2D view (topY < 0)
+        // 1) Bottom portion in 3D view (y >= 0 to bottomY)
+        if (bottomY > 0) {
+          fill(0, 0, 0);
+          rect(xStart, 0, colWidth, bottomY);
+
+          fill(55, 255, 225, 180);
+          rect(xStart, bottomY - 2, colWidth, 2);
+        }
+        // 2) Top overflowing portion in 2D view (topY to 0) with opacity gradient
+        if (overflowOpacity > 0) {
+          const gradTop = Math.max(topY, -sceneH);
+          const grad = drawingContext.createLinearGradient(0, gradTop, 0, 0);
+          grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+          grad.addColorStop(1, `rgba(0, 0, 0, ${overflowOpacity})`);
+          drawingContext.fillStyle = grad;
+          drawingContext.fillRect(xStart, topY, colWidth, -topY);
+
+          fill(55, 255, 225, 180 * overflowOpacity);
+          rect(xStart, topY, colWidth, 2);
+        }
+      }
     } else {
       // Distance falloff factor t (0 for close wall, 1 for far wall)
       const t = constrain(sq / (wSq / 2.5), 0, 1);
 
       // Smooth depth gradient between Close Wall Color and Far Wall Color
-      const red = lerp(colorCloseRgb.r, colorFarRgb.r, t);
+      const red = Math.round(lerp(colorCloseRgb.r, colorFarRgb.r, t));
       const greenBase = lerp(colorCloseRgb.g, colorFarRgb.g, t);
-      const blue = lerp(colorCloseRgb.b, colorFarRgb.b, t);
+      const blue = Math.round(lerp(colorCloseRgb.b, colorFarRgb.b, t));
 
       // 720° FOV quirk modulation on green channel
       const greenFactor = Math.max(0, (115 - particle.viewAngle / 4) / 103.5);
-      const green = constrain(greenBase * greenFactor, 0, 255);
-      fill(red, green, blue);
+      const green = Math.round(constrain(greenBase * greenFactor, 0, 255));
 
-      // Pixel-perfect integer boundary alignment: completely eliminates vertical seam lines
-      rect(xStart, topY, colWidth, h);
+      if (topY >= 0) {
+        // Completely inside 3D view: solid fill
+        fill(red, green, blue);
+        rect(xStart, topY, colWidth, h);
+      } else {
+        // Wall slice overflows into 2D view (topY < 0)
+        // 1) Bottom portion in 3D view (y >= 0 to bottomY)
+        if (bottomY > 0) {
+          fill(red, green, blue);
+          rect(xStart, 0, colWidth, bottomY);
+        }
+        // 2) Top overflowing portion in 2D view (topY to 0) with opacity gradient
+        if (overflowOpacity > 0) {
+          const gradTop = Math.max(topY, -sceneH);
+          const grad = drawingContext.createLinearGradient(0, gradTop, 0, 0);
+          grad.addColorStop(0, `rgba(${red}, ${green}, ${blue}, 0)`);
+          grad.addColorStop(1, `rgba(${red}, ${green}, ${blue}, ${overflowOpacity})`);
+          drawingContext.fillStyle = grad;
+          drawingContext.fillRect(xStart, topY, colWidth, -topY);
+        }
+      }
     }
 
     slicesDrawn++;
