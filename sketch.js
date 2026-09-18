@@ -687,11 +687,11 @@ function initWalls(count) {
 }
 
 function handleInput() {
-  // Free movement: supports both WASD and Arrow Keys without any wall collision halts
-  if (keyIsDown(65) || keyIsDown(LEFT_ARROW)) particle.rotate(-rotationOffset);  // A or Left
-  if (keyIsDown(68) || keyIsDown(RIGHT_ARROW)) particle.rotate(rotationOffset);   // D or Right
-  if (keyIsDown(87) || keyIsDown(UP_ARROW)) particle.move(movingOffset);          // W or Up
-  if (keyIsDown(83) || keyIsDown(DOWN_ARROW)) particle.move(-movingOffset);       // S or Down
+  // Player movement: strictly WASD keys only (arrow keys disabled)
+  if (keyIsDown(65)) particle.rotate(-rotationOffset);  // A: Rotate left
+  if (keyIsDown(68)) particle.rotate(rotationOffset);   // D: Rotate right
+  if (keyIsDown(87)) particle.move(movingOffset);       // W: Move forward
+  if (keyIsDown(83)) particle.move(-movingOffset);      // S: Move backward
 }
 
 function mousePressed() {
@@ -907,7 +907,7 @@ function renderHUD() {
   text(`Slices: ${currentSliceCount} / ${particle.rays.length} (${saved}% saved)`, rightX - 10, 58);
   fill(55, 255, 225);
   textSize(11);
-  text(`⚡ Move: WASD / Arrows (Cross Walls)`, rightX - 10, 75);
+  text(`⚡ Move: WASD Keys (Cross Walls)`, rightX - 10, 75);
   text(`🌌 Drag Singularity / Alt+Click`, rightX - 10, 92);
   pop();
 }
