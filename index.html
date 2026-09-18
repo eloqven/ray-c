@@ -1,114 +1,468 @@
 <!DOCTYPE html>
-<html lang="">
+<html lang="en">
 
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ray casting</title>
+  <title>Ray Casting 3D Engine - Adaptive LOD</title>
   <style>
-    html,
-    body {
+    * {
+      box-sizing: border-box;
+    }
+    html, body {
       width: 100%;
       height: 100%;
       padding: 0;
       margin: 0;
-      overflow: hidden;
       background: #000;
-    }
-
-    canvas {
-      display: block;
-    }
-
-    .hud-slider {
-      opacity: 0.05;
-      transition: opacity 120ms ease, filter 120ms ease;
-    }
-
-    body:has(.hud-control:hover) .hud-control,
-    body:has(.hud-control:focus) .hud-control,
-    body:has(.hud-pad.active) .hud-control {
-      opacity: 0.66;
-    }
-
-    .hud-slider:hover,
-    .hud-slider:focus,
-    .hud-slider:focus-visible {
-      opacity: 0.66;
-      filter: drop-shadow(0 0 8px rgba(255, 70, 70, 0.9));
-    }
-
-    .hud-check {
-      position: absolute;
-      color: rgba(235, 235, 235, 0.88);
-      font: 12px/1.2 sans-serif;
-      opacity: 0.05;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
       user-select: none;
     }
-
-    .hud-check:hover,
-    .hud-check:focus-within {
-      opacity: 0.66;
-      filter: drop-shadow(0 0 8px rgba(255, 70, 70, 0.9));
-    }
-
-    .hud-check input {
-      accent-color: #d0d0d0;
-      margin-right: 6px;
-    }
-
-    .hud-pad {
+    canvas {
+      display: block;
       position: absolute;
-      width: 132px;
-      height: 132px;
-      box-sizing: border-box;
-      border: 1px solid rgba(127, 180, 255, 0.7);
-      border-radius: 10px;
-      background:
-        linear-gradient(rgba(127, 180, 255, 0.12), rgba(127, 180, 255, 0.12)) center/1px 100% no-repeat,
-        linear-gradient(90deg, rgba(127, 180, 255, 0.12), rgba(127, 180, 255, 0.12)) center/100% 1px no-repeat,
-        linear-gradient(135deg, rgba(127, 180, 255, 0.14), rgba(20, 28, 44, 0.18));
-      opacity: 0.05;
-      transition: opacity 120ms ease, filter 120ms ease, box-shadow 120ms ease;
+      top: 0;
+      left: 0;
+      z-index: 0 !important;
+    }
+    input[type="range"] {
+      position: absolute;
+      z-index: 50 !important;
+      accent-color: #37ffe1;
+      cursor: pointer;
+    }
+    .modal-card input[type="range"] {
+      position: static;
+      width: 100%;
+    }
+
+    /* Gear Button */
+    .settings-gear-btn {
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      z-index: 100;
+      background: rgba(15, 20, 30, 0.85);
+      color: #37ffe1;
+      border: 1px solid #37ffe1;
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+      backdrop-filter: blur(6px);
       outline: none;
     }
-
-    .hud-pad:hover,
-    .hud-pad:focus,
-    .hud-pad:focus-visible,
-    .hud-pad.active {
-      opacity: 0.66;
-      box-shadow: 0 0 0 1px rgba(255, 70, 70, 0.7), 0 0 14px rgba(255, 70, 70, 0.55);
+    .settings-gear-btn:hover {
+      background: #37ffe1;
+      color: #0d131a;
+      box-shadow: 0 0 12px rgba(55, 255, 225, 0.6);
+      transform: translateY(-1px);
     }
 
-    .hud-pad-knob {
-      position: absolute;
-      width: 14px;
-      height: 14px;
-      border-radius: 50%;
-      background: #d7e7ff;
-      border: 1px solid rgba(127, 180, 255, 0.8);
-      box-shadow: 0 0 10px rgba(127, 180, 255, 0.45);
-      transform: translate(-50%, -50%);
+    /* Modal Overlay */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 1;
+      visibility: visible;
+      transition: opacity 0.25s ease, visibility 0.25s ease;
+    }
+    .modal-overlay.hidden {
+      opacity: 0;
+      visibility: hidden;
       pointer-events: none;
     }
 
-    input[type="range"] {
-      accent-color: #d0d0d0;
+    /* Modal Card */
+    .modal-card {
+      background: #111622;
+      border: 1px solid rgba(55, 255, 225, 0.35);
+      border-radius: 12px;
+      width: 90%;
+      max-width: 440px;
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7), 0 0 20px rgba(55, 255, 225, 0.15);
+      overflow: hidden;
+      animation: modalSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes modalSlideIn {
+      from { transform: translateY(-16px) scale(0.97); }
+      to { transform: translateY(0) scale(1); }
     }
 
-    input[type="range"]:focus-visible {
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      background: rgba(255, 255, 255, 0.03);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .modal-header h3 {
+      margin: 0;
+      font-size: 17px;
+      color: #37ffe1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .close-x {
+      background: none;
+      border: none;
+      color: #8892b0;
+      font-size: 24px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0;
+      transition: color 0.15s ease;
+    }
+    .close-x:hover {
+      color: #fff;
+    }
+
+    .modal-body {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .setting-item {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .setting-item label {
+      font-size: 13px;
+      color: #e2e8f0;
+      font-weight: 600;
+    }
+    .setting-desc {
+      margin: 0;
+      font-size: 11px;
+      color: #8892b0;
+    }
+
+    .form-control {
+      background: #182030;
+      color: #fff;
+      border: 1px solid #2d3748;
+      border-radius: 6px;
+      padding: 9px 12px;
+      font-size: 13px;
       outline: none;
-      filter: brightness(1.08) drop-shadow(0 0 8px rgba(255, 70, 70, 0.9));
+      cursor: pointer;
+      transition: border-color 0.2s ease;
+      width: 100%;
+    }
+    .form-control:focus {
+      border-color: #37ffe1;
+    }
+
+    .color-pickers {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 4px;
+    }
+    .color-picker-card {
+      background: #182030;
+      border: 1px solid #2d3748;
+      border-radius: 8px;
+      padding: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: border-color 0.2s ease;
+    }
+    .color-picker-card:hover {
+      border-color: #37ffe1;
+    }
+    .color-picker-card input[type="color"] {
+      -webkit-appearance: none;
+      border: none;
+      width: 34px;
+      height: 34px;
+      border-radius: 6px;
+      cursor: pointer;
+      background: none;
+      padding: 0;
+    }
+    .color-picker-card input[type="color"]::-webkit-color-swatch-wrapper {
+      padding: 0;
+    }
+    .color-picker-card input[type="color"]::-webkit-color-swatch {
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 6px;
+    }
+    .color-label-box {
+      display: flex;
+      flex-direction: column;
+    }
+    .color-label-box span {
+      font-size: 12px;
+      color: #e2e8f0;
+      font-weight: 500;
+    }
+    .color-label-box small {
+      font-size: 10px;
+      color: #8892b0;
+      font-family: monospace;
+    }
+
+    .status-badge {
+      background: rgba(55, 255, 225, 0.08);
+      border: 1px solid rgba(55, 255, 225, 0.2);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 11px;
+      color: #a0aec0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .modal-footer {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 14px 20px;
+      background: rgba(255, 255, 255, 0.02);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      justify-content: flex-end;
+    }
+    .btn {
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+      outline: none;
+    }
+    .btn-primary {
+      background: #37ffe1;
+      color: #0a1118;
+      border-color: #37ffe1;
+    }
+    .btn-primary:hover {
+      background: #2ee6cb;
+      box-shadow: 0 0 10px rgba(55, 255, 225, 0.4);
+    }
+    .btn-secondary {
+      background: #222d3d;
+      color: #e2e8f0;
+      border-color: #3b4759;
+    }
+    .btn-secondary:hover {
+      background: #2d3b4e;
+      color: #fff;
+    }
+    .btn-danger {
+      background: transparent;
+      color: #f56565;
+      border-color: rgba(245, 101, 101, 0.3);
+      margin-right: auto;
+    }
+    .btn-danger:hover {
+      background: rgba(245, 101, 101, 0.15);
+      border-color: #f56565;
+    }
+    .nav-bar {
+      position: absolute;
+      top: 8px;
+      left: 360px;
+      z-index: 80;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      background: rgba(10, 15, 25, 0.85);
+      backdrop-filter: blur(6px);
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(55, 255, 225, 0.25);
+    }
+    .nav-link {
+      color: #8892b0;
+      text-decoration: none;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+    .nav-link:hover, .nav-link.active {
+      color: #37ffe1;
+      background: rgba(55, 255, 225, 0.15);
     }
   </style>
   <script src="p5/p5.js"></script>
   <script src="boundary.js"></script>
+  <script src="ray.js"></script>
+  <script src="singularity.js"></script>
   <script src="particle.js"></script>
   <script src="sketch.js"></script>
 </head>
 
 <body>
+  <!-- Experiment Navigation Bar -->
+  <div class="nav-bar">
+    <span style="font-size: 11px; color: #37ffe1; font-weight: 700; margin-right: 4px;">EXPERIMENTS:</span>
+    <a href="index.html" class="nav-link active">🚀 Master</a>
+    <a href="index_lensing.html" class="nav-link">🌌 Lensing</a>
+    <a href="index_fisheye.html" class="nav-link">🐟 Fish Eye</a>
+    <a href="index_classic.html" class="nav-link">🧱 Classic</a>
+  </div>
+
+  <!-- Settings Button -->
+  <button id="btn-open-settings" class="settings-gear-btn" title="Open Settings (Esc to close)">
+    <span>⚙ Settings</span>
+  </button>
+
+  <!-- Settings Modal Overlay -->
+  <div id="settings-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>⚙ Game & Display Settings</h3>
+        <button id="btn-modal-close" class="close-x">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- Setting 1: Split Ratio Slider (Multiples of 10%) -->
+        <div class="setting-item">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label for="modal-split-slider">Screen Split (Multiples of 10%)</label>
+            <span id="modal-split-label" style="font-size: 13px; color: #37ffe1; font-weight: 600;">50% Top / 50% Bottom</span>
+          </div>
+          <p class="setting-desc">Slide in 10% steps to allocate screen height between 2D and 3D views:</p>
+          <input type="range" id="modal-split-slider" min="10" max="90" step="10" value="50" style="width: 100%; margin-top: 8px;">
+        </div>
+
+        <!-- Setting 2: Pair of Colors -->
+        <div class="setting-item">
+          <label>Wall Depth Gradient (Close vs Far Color)</label>
+          <p class="setting-desc">Gradient transition from near walls to distant walls:</p>
+          <div class="color-pickers">
+            <div class="color-picker-card">
+              <input type="color" id="close-color-input" value="#ff731a">
+              <div class="color-label-box">
+                <span>Close Wall Color</span>
+                <small id="close-hex-label">#FF731A</small>
+              </div>
+            </div>
+            <div class="color-picker-card">
+              <input type="color" id="far-color-input" value="#1e0800">
+              <div class="color-label-box">
+                <span>Far Wall Color</span>
+                <small id="far-hex-label">#1E0800</small>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Setting 3: Global Space Curvature -->
+        <div class="setting-item">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label for="modal-curve-slider">Global Space Curvature (Degrees)</label>
+            <span id="modal-curve-label" style="font-size: 13px; color: #37ffe1; font-weight: 600;">0° (Flat Space)</span>
+          </div>
+          <p class="setting-desc">Bends all passing light continuously by N° (negative = left, positive = right):</p>
+          <input type="range" id="modal-curve-slider" min="-60" max="60" step="1" value="0" style="width: 100%; margin-top: 8px;">
+        </div>
+
+        <!-- Setting 4: Black Hole Singularity Mass -->
+        <div class="setting-item">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label for="modal-gravity-slider">Black Hole Singularity (Gravitational Lensing)</label>
+            <span id="modal-gravity-label" style="font-size: 13px; color: #37ffe1; font-weight: 600;">350 M (Active)</span>
+          </div>
+          <p class="setting-desc">Point-mass gravity strength. Drastically bends light around the event horizon (0 = Off):</p>
+          <input type="range" id="modal-gravity-slider" min="0" max="3000" step="10" value="350" style="width: 100%; margin-top: 8px;">
+        </div>
+
+        <!-- Setting 5: Fish Eye Distortion -->
+        <div class="setting-item">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label for="modal-fisheye-slider">Fish Eye Lens Effect (Perspective Distortion)</label>
+            <span id="modal-fisheye-label" style="font-size: 13px; color: #37ffe1; font-weight: 600;">0% (Flat Corrected)</span>
+          </div>
+          <p class="setting-desc">Blend from flat rectilinear projection (0%) to classic spherical fish-eye (100%) and hyper-dome (200%):</p>
+          <input type="range" id="modal-fisheye-slider" min="0" max="2" step="0.05" value="0" style="width: 100%; margin-top: 8px;">
+        </div>
+
+        <!-- Setting 6: Black Hole Event Horizon Radius (Eating vs Orbiting) -->
+        <div class="setting-item">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label for="modal-radius-slider">Black Hole Eating Radius (Singularity / Event Horizon)</label>
+            <span id="modal-radius-label" style="font-size: 13px; color: #37ffe1; font-weight: 600;">15px</span>
+          </div>
+          <p class="setting-desc">Sets event horizon radius. At 0px, rays never get eaten and orbit freely around the orb:</p>
+          <input type="range" id="modal-radius-slider" min="0" max="40" step="1" value="15" style="width: 100%; margin-top: 8px;">
+        </div>
+
+        <!-- Setting 7: Ray Outward Escape Inclination -->
+        <div class="setting-item">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label for="modal-escape-slider">Ray Inclination to Escape (Spiral Outward to Walls)</label>
+            <span id="modal-escape-label" style="font-size: 13px; color: #37ffe1; font-weight: 600;">0.20 (Spiral Outward)</span>
+          </div>
+          <p class="setting-desc">Modifies ray inclination so trapped orbital rays sling and spiral outwards to strike and illuminate room walls:</p>
+          <input type="range" id="modal-escape-slider" min="0" max="1" step="0.05" value="0.2" style="width: 100%; margin-top: 8px;">
+        </div>
+
+        <!-- Step Magnitude Controller -->
+        <div class="setting-item" style="background: rgba(55, 255, 225, 0.05); padding: 10px; border-radius: 8px; border: 1px solid rgba(55, 255, 225, 0.2);">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label>Slider Step Magnitude (Shift Key)</label>
+            <span id="modal-step-badge" style="font-size: 13px; color: #37ffe1; font-weight: 700; background: rgba(55, 255, 225, 0.15); padding: 2px 8px; border-radius: 4px;">1x</span>
+          </div>
+          <p class="setting-desc" style="margin-top: 4px;">Pressing <kbd style="background: #222d3d; padding: 2px 6px; border-radius: 4px; border: 1px solid #4a5568; color: #fff;">Shift</kbd> cycles slider sensitivity by orders of magnitude: 0.01x &rarr; 0.1x &rarr; 1x &rarr; 10x &rarr; 100x.</p>
+          <button id="btn-step-cycle" class="btn btn-secondary" style="margin-top: 8px; width: 100%;">⚡ Cycle Magnitude Multiplier</button>
+        </div>
+
+        <!-- Experiment Presets / Links -->
+        <div class="setting-item">
+          <label>Experiment Sandboxes</label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px;">
+            <a href="index_lensing.html" class="btn btn-secondary" style="text-align: center; text-decoration: none; padding: 6px;">🌌 Gravitational Lensing</a>
+            <a href="index_fisheye.html" class="btn btn-secondary" style="text-align: center; text-decoration: none; padding: 6px;">🐟 Fish Eye Lab</a>
+            <a href="index_classic.html" class="btn btn-secondary" style="text-align: center; text-decoration: none; padding: 6px;">🧱 Classic LOD Base</a>
+            <a href="index.html" class="btn btn-primary" style="text-align: center; text-decoration: none; padding: 6px;">🚀 Master Engine</a>
+          </div>
+        </div>
+
+        <!-- Singularity Drag Tip -->
+        <div class="status-badge" style="border-color: rgba(55, 255, 225, 0.35); background: rgba(55, 255, 225, 0.06);">
+          <span>🌌 <b>Interactive Singularity:</b> Drag the black hole in the 2D view, or Alt+Click anywhere to reposition it!</span>
+        </div>
+
+        <!-- Cache Status -->
+        <div class="status-badge">
+          <span>💾 All settings & sliders auto-cached in browser. Player position excluded. Ghosting through walls enabled.</span>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="btn-reset-defaults" class="btn btn-danger">Reset Defaults</button>
+        <button id="btn-apply-live" class="btn btn-secondary">Apply Live</button>
+        <button id="btn-save-refresh" class="btn btn-primary">💾 Save & Refresh Page</button>
+      </div>
+    </div>
+  </div>
 </body>
 
 </html>

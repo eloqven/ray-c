@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ray Casting Experiment: Fish Eye Lens & Perspective Warping</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%; padding: 0; margin: 0;
+      background: #000; color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden; user-select: none;
+    }
+    canvas { display: block; position: absolute; top: 0; left: 0; z-index: 0 !important; }
+    input[type="range"] { position: absolute; z-index: 50 !important; accent-color: #37ffe1; cursor: pointer; }
+    .nav-bar {
+      position: absolute; top: 8px; left: 360px; z-index: 80;
+      display: flex; gap: 8px; align-items: center;
+      background: rgba(10, 15, 25, 0.8); backdrop-filter: blur(6px);
+      padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(55, 255, 225, 0.2);
+    }
+    .nav-link {
+      color: #8892b0; text-decoration: none; font-size: 11px; font-weight: 600;
+      padding: 3px 8px; border-radius: 4px; transition: all 0.2s;
+    }
+    .nav-link:hover, .nav-link.active {
+      color: #37ffe1; background: rgba(55, 255, 225, 0.15);
+    }
+    .settings-gear-btn {
+      position: absolute; top: 10px; right: 15px; z-index: 100;
+      background: rgba(15, 20, 30, 0.85); color: #37ffe1; border: 1px solid #37ffe1;
+      border-radius: 6px; padding: 6px 14px; font-size: 13px; font-weight: 600;
+      cursor: pointer; display: flex; align-items: center; gap: 6px;
+      backdrop-filter: blur(6px); outline: none; transition: all 0.2s;
+    }
+    .settings-gear-btn:hover {
+      background: #37ffe1; color: #0d131a; box-shadow: 0 0 12px rgba(55, 255, 225, 0.6);
+    }
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(8px);
+      display: flex; align-items: center; justify-content: center; z-index: 1000;
+    }
+    .modal-overlay.hidden { display: none; }
+    .modal-card {
+      background: #111622; border: 1px solid rgba(55, 255, 225, 0.35); border-radius: 12px;
+      width: 90%; max-width: 440px; box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7); overflow: hidden;
+    }
+    .modal-header {
+      display: flex; justify-content: space-between; align-items: center; padding: 14px 20px;
+      background: rgba(255, 255, 255, 0.03); border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .modal-header h3 { margin: 0; font-size: 16px; color: #37ffe1; }
+    .close-x { background: none; border: none; color: #8892b0; font-size: 22px; cursor: pointer; }
+    .modal-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; }
+    .btn { padding: 8px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid transparent; }
+    .btn-primary { background: #37ffe1; color: #0a1118; }
+    .btn-secondary { background: #222d3d; color: #e2e8f0; border-color: #3b4759; }
+  </style>
+  <script src="p5/p5.js"></script>
+  <script src="boundary.js"></script>
+  <script src="ray.js"></script>
+  <script src="singularity.js"></script>
+  <script src="particle.js"></script>
+  <script>
+    // Pre-seed experiment defaults for Fish Eye lens
+    (function() {
+      const expKey = 'raycasting_engine_settings';
+      try {
+        let s = JSON.parse(localStorage.getItem(expKey) || '{}');
+        s.fishEye = 1.0;
+        s.gravityMass = 0;
+        s.globalCurve = 0;
+        localStorage.setItem(expKey, JSON.stringify(s));
+      } catch(e) {}
+    })();
+  </script>
+  <script src="sketch.js"></script>
+</head>
+
+<body>
+  <!-- Experiment Navigation Bar -->
+  <div class="nav-bar">
+    <span style="font-size: 11px; color: #37ffe1; font-weight: 700; margin-right: 4px;">EXPERIMENTS:</span>
+    <a href="index.html" class="nav-link">🚀 Master</a>
+    <a href="index_lensing.html" class="nav-link">🌌 Lensing</a>
+    <a href="index_fisheye.html" class="nav-link active">🐟 Fish Eye</a>
+    <a href="index_classic.html" class="nav-link">🧱 Classic</a>
+  </div>
+
+  <button id="btn-open-settings" class="settings-gear-btn">
+    <span>⚙ Settings</span>
+  </button>
+
+  <div id="settings-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>🐟 Fish Eye Lens Lab</h3>
+        <button id="btn-modal-close" class="close-x">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 12px; color: #cbd5e0; margin: 0;">
+          This sandbox lets you explore perspective projection optics. Compare flat Euclidean perspective (0%) against classic spherical barrel fisheye (100%) and hyper-curved dome lenses (200%).
+        </p>
+        <div style="background: rgba(55, 255, 225, 0.06); padding: 10px; border-radius: 6px; font-size: 12px; color: #37ffe1;">
+          💡 <b>Key Concepts:</b><br>
+          &bull; <b>0% (Flat):</b> Multiplied by <code>cos(&alpha;)</code> to keep walls planar<br>
+          &bull; <b>100% (Fish Eye):</b> Raw Euclidean distance produces curved barrel walls<br>
+          &bull; <b>Shift key:</b> Cycles slider magnitude step (0.01x to 100x)<br>
+          &bull; <b>WASD / Arrows:</b> Smooth ghosting through all walls
+        </div>
+        <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px;">
+          <a href="index.html" class="btn btn-primary" style="text-decoration: none;">Return to Master Engine</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+
+</html>

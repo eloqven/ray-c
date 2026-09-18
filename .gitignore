@@ -1,0 +1,6 @@
+# Sensitive and temporary files
+PAT
+*.log
+.DS_Store
+Screenshot*.jpg
+Screenshot*.png

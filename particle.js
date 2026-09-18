@@ -1,158 +1,262 @@
 class Particle {
   constructor() {
-    this.pos = { x: 0, y: 0 };
+    this.pos = createVector(width / 2, height / 4);
+    this.rays = [];
     this.heading = 0;
-    this.viewAngle = 60;
-    this.rayDensity = 2;
-    this.scene = new Float32Array(0);
-    this.hitX = new Float32Array(0);
-    this.hitY = new Float32Array(0);
-    this.hitVisible = new Uint8Array(0);
-    this.rayCos = new Float32Array(0);
-    this.raySin = new Float32Array(0);
-    this.rebuildRayData();
+    this.viewAngle = 46;
+    this.rayMultiplier = 0.89;
+    this.eyes = [];
+    this.hitTypes = [];
+    this.initRays();
+  }
+
+  initRays() {
+    this.rays = [];
+    const halfFOV = this.viewAngle / 2;
+    for (let a = -halfFOV; a < halfFOV; a += this.rayMultiplier) {
+      const relAngle = radians(a);
+      this.rays.push(new Ray(this.pos, relAngle + this.heading, relAngle));
+    }
+    if (this.rays.length > 0) {
+      this.eyes = [this.rays[0], this.rays[this.rays.length - 1]];
+    } else {
+      this.eyes = [];
+    }
   }
 
   updateFOV(fov) {
-    if (this.viewAngle === fov) {
-      return;
-    }
-
     this.viewAngle = fov;
-    this.rebuildRayData();
+    this.initRays();
   }
 
-  updateDensity(density) {
-    if (this.rayDensity === density) {
-      return;
-    }
-
-    this.rayDensity = density;
-    this.rebuildRayData();
-  }
-
-  rebuildRayData() {
-    const rayCount = Math.max(1, Math.floor(this.viewAngle * this.rayDensity) + 1);
-    const halfView = (this.viewAngle * Math.PI) / 360;
-    const step = rayCount > 1 ? (halfView * 2) / (rayCount - 1) : 0;
-
-    this.scene = new Float32Array(rayCount);
-    this.hitX = new Float32Array(rayCount);
-    this.hitY = new Float32Array(rayCount);
-    this.hitVisible = new Uint8Array(rayCount);
-    this.rayCos = new Float32Array(rayCount);
-    this.raySin = new Float32Array(rayCount);
-
-    for (let index = 0; index < rayCount; index++) {
-      const offset = -halfView + (step * index);
-      this.rayCos[index] = Math.cos(offset);
-      this.raySin[index] = Math.sin(offset);
-    }
+  updateDensity(multiplier) {
+    this.rayMultiplier = Math.max(0.05, multiplier);
+    this.initRays();
   }
 
   rotate(angle) {
     this.heading += angle;
+    for (let i = 0; i < this.rays.length; i++) {
+      const ray = this.rays[i];
+      ray.setAngle(ray.relAngle + this.heading);
+    }
   }
 
-  move(amount, worldWidth = Number.POSITIVE_INFINITY, worldHeight = Number.POSITIVE_INFINITY) {
-    const nextX = this.pos.x + (Math.cos(this.heading) * amount);
-    const nextY = this.pos.y + (Math.sin(this.heading) * amount);
+  move(amount) {
+    const vel = p5.Vector.fromAngle(this.heading);
+    vel.setMag(amount);
+    this.pos.add(vel); 
+  }
 
-    if (Number.isFinite(worldWidth) && Number.isFinite(worldHeight)) {
-      const padding = 6;
-      const maxX = worldWidth - padding;
-      const maxY = worldHeight - padding;
+  update(x, y) {
+    this.pos.set(x, y);
+  }
 
-      this.pos.x = Math.min(maxX, Math.max(padding, nextX));
-      this.pos.y = Math.min(maxY, Math.max(padding, nextY));
-      return;
+  look(walls, drawLines = true, singularity = null, globalCurve = 0, fishEye = 0.0, escapeFactor = 0.0) {
+    const scene = [];
+    const hitTypes = [];
+    let leftEyeDist = null;
+    let rightEyeDist = null;
+
+    const isCurved = (singularity && singularity.mass > 0) || (globalCurve !== 0);
+
+    if (!isCurved) {
+      // Fast path: pure straight line analytic raycasting
+      for (let i = 0; i < this.rays.length; i++) {
+        const ray = this.rays[i];
+        let closest = null;
+        let record = Infinity;
+
+        for (let wall of walls) {
+          const pt = ray.cast(wall);
+          if (pt) {
+            const d = dist(this.pos.x, this.pos.y, pt.x, pt.y);
+            // Near-plane clipping: ignore self-intersection when player is crossing through wall
+            if (d < 3.0) continue;
+            if (d < record) {
+              record = d;
+              closest = pt;
+            }
+          }
+        }
+
+        if (closest && drawLines) {
+          const closeC = (typeof colorCloseRgb !== 'undefined') ? colorCloseRgb : { r: 255, g: 115, b: 26 };
+          const farC = (typeof colorFarRgb !== 'undefined') ? colorFarRgb : { r: 30, g: 8, b: 0 };
+          const t = (this.rays.length > 1) ? (i / (this.rays.length - 1)) : 0;
+
+          const r = lerp(closeC.r, farC.r, t);
+          const g = lerp(closeC.g, farC.g, t);
+          const b = lerp(closeC.b, farC.b, t);
+
+          stroke(r, g, b, 100);
+          strokeWeight(1);
+          line(this.pos.x, this.pos.y, closest.x, closest.y);
+        }
+
+        // Fish Eye perspective modulation:
+        const fishFactor = Math.cos(ray.relAngle) * (1.0 - fishEye) + 1.0 * fishEye;
+        const finalD = Math.max(1, record * fishFactor);
+
+        scene[i] = finalD;
+        hitTypes[i] = 'wall';
+        if (i === 0) leftEyeDist = record;
+        if (i === this.rays.length - 1) rightEyeDist = record;
+      }
+
+      this.hitTypes = hitTypes;
+      return {
+        scene: scene,
+        hitTypes: hitTypes,
+        leftD: leftEyeDist,
+        rightD: rightEyeDist
+      };
     }
 
-    this.pos.x = nextX;
-    this.pos.y = nextY;
-  }
+    // Curved ray marching path: Gravitational lensing & global uniform curvature
+    const ds = 8;
+    const maxDist = Math.max(typeof sceneW !== 'undefined' ? sceneW : width, typeof sceneH !== 'undefined' ? sceneH : height) * 1.5;
+    const maxSteps = Math.min(220, Math.ceil(maxDist / ds));
+    const radCurve = (globalCurve * Math.PI) / 180;
+    const hasGravity = singularity && singularity.mass > 0;
+    const sRadSq = hasGravity ? singularity.radius * singularity.radius : 0;
 
-  look(walls) {
-    const posX = this.pos.x;
-    const posY = this.pos.y;
-    const cosHeading = Math.cos(this.heading);
-    const sinHeading = Math.sin(this.heading);
+    for (let i = 0; i < this.rays.length; i++) {
+      const ray = this.rays[i];
+      let theta = this.heading + ray.relAngle;
+      let px = this.pos.x;
+      let py = this.pos.y;
+      const path = [{ x: px, y: py }];
+      let totalDist = 0;
+      let hitType = 'none';
 
-    for (let rayIndex = 0; rayIndex < this.scene.length; rayIndex++) {
-      const localCos = this.rayCos[rayIndex];
-      const localSin = this.raySin[rayIndex];
-      const dx = (cosHeading * localCos) - (sinHeading * localSin);
-      const dy = (sinHeading * localCos) + (cosHeading * localSin);
+      for (let s = 0; s < maxSteps; s++) {
+        // 1. Gravitational deflection towards singularity
+        if (hasGravity) {
+          const dx = singularity.x - px;
+          const dy = singularity.y - py;
+          const distSq = dx * dx + dy * dy;
+          if (singularity.radius > 0 && distSq <= sRadSq) {
+            totalDist += Math.sqrt(distSq);
+            hitType = 'singularity';
+            path.push({ x: singularity.x, y: singularity.y });
+            break;
+          }
+          const distR = Math.sqrt(distSq);
+          const cross = Math.cos(theta) * dy - Math.sin(theta) * dx;
+          let dTheta = (singularity.mass * cross / (distSq * distR + 3000)) * (ds / 10);
 
-      let closestDist = Infinity;
+          // Ray inclination / Escape boost: pushes ray heading radially outwards
+          if (escapeFactor > 0) {
+            const outwardX = -dx / distR;
+            const outwardY = -dy / distR;
+            const escapeCross = Math.cos(theta) * outwardY - Math.sin(theta) * outwardX;
+            dTheta += escapeFactor * escapeCross * (ds / 25);
+          }
 
-      for (let wallIndex = 0; wallIndex < walls.length; wallIndex++) {
-        const dist = this.intersect(posX, posY, dx, dy, walls[wallIndex]);
-        if (dist !== null && dist < closestDist) {
-          closestDist = dist;
+          theta += dTheta;
+        }
+
+        // 2. Global uniform curvature
+        if (globalCurve !== 0) {
+          theta += radCurve * (ds / 600);
+        }
+
+        const nx = px + Math.cos(theta) * ds;
+        const ny = py + Math.sin(theta) * ds;
+
+        // Fast AABB rejection against wall bounding boxes
+        const sMinX = px < nx ? px : nx;
+        const sMaxX = px > nx ? px : nx;
+        const sMinY = py < ny ? py : ny;
+        const sMaxY = py > ny ? py : ny;
+
+        let closestT = null;
+        for (let wall of walls) {
+          if (sMinX > wall.maxX || sMaxX < wall.minX || sMinY > wall.maxY || sMaxY < wall.minY) {
+            continue;
+          }
+          const x1 = wall.a.x, y1 = wall.a.y;
+          const x2 = wall.b.x, y2 = wall.b.y;
+          const den = (x1 - x2) * (py - ny) - (y1 - y2) * (px - nx);
+          if (den === 0) continue;
+          const wt = ((x1 - px) * (py - ny) - (y1 - py) * (px - nx)) / den;
+          const rt = -((x1 - x2) * (y1 - py) - (y1 - y2) * (x1 - px)) / den;
+          if (wt >= 0 && wt <= 1 && rt >= 0 && rt <= 1) {
+            // Near-plane clipping on step 0: ignore self-intersection when player is crossing through wall
+            if (s === 0 && rt < 0.35) continue;
+            if (closestT === null || rt < closestT) {
+              closestT = rt;
+            }
+          }
+        }
+
+        if (closestT !== null) {
+          const hx = px + closestT * (nx - px);
+          const hy = py + closestT * (ny - py);
+          path.push({ x: hx, y: hy });
+          totalDist += closestT * ds;
+          hitType = 'wall';
+          break;
+        }
+
+        path.push({ x: nx, y: ny });
+        totalDist += ds;
+        px = nx;
+        py = ny;
+
+        const boundW = typeof sceneW !== 'undefined' ? sceneW : width;
+        const boundH = typeof sceneH !== 'undefined' ? sceneH : height;
+        if (px < -50 || px > boundW + 50 || py < -50 || py > boundH + 50) {
+          break;
         }
       }
 
-      this.scene[rayIndex] = closestDist;
+      if (drawLines && path.length >= 2) {
+        const closeC = (typeof colorCloseRgb !== 'undefined') ? colorCloseRgb : { r: 255, g: 115, b: 26 };
+        const farC = (typeof colorFarRgb !== 'undefined') ? colorFarRgb : { r: 30, g: 8, b: 0 };
+        const t = (this.rays.length > 1) ? (i / (this.rays.length - 1)) : 0;
 
-      if (closestDist < Infinity) {
-        this.hitVisible[rayIndex] = 1;
-        this.hitX[rayIndex] = posX + (dx * closestDist);
-        this.hitY[rayIndex] = posY + (dy * closestDist);
-      } else {
-        this.hitVisible[rayIndex] = 0;
+        const r = lerp(closeC.r, farC.r, t);
+        const g = lerp(closeC.g, farC.g, t);
+        const b = lerp(closeC.b, farC.b, t);
+
+        stroke(r, g, b, 120);
+        strokeWeight(1);
+        noFill();
+        beginShape();
+        for (let pt of path) {
+          vertex(pt.x, pt.y);
+        }
+        endShape();
       }
+
+      // Fish Eye perspective modulation:
+      const fishFactor = Math.cos(ray.relAngle) * (1.0 - fishEye) + 1.0 * fishEye;
+      const finalD = Math.max(1, totalDist * fishFactor);
+
+      scene[i] = finalD;
+      hitTypes[i] = hitType;
+      if (i === 0) leftEyeDist = totalDist;
+      if (i === this.rays.length - 1) rightEyeDist = totalDist;
     }
 
+    this.hitTypes = hitTypes;
     return {
-      scene: this.scene,
-      hitX: this.hitX,
-      hitY: this.hitY,
-      hitVisible: this.hitVisible,
-      rayCos: this.rayCos,
+      scene: scene,
+      hitTypes: hitTypes,
+      leftD: leftEyeDist,
+      rightD: rightEyeDist
     };
   }
 
-  intersect(posX, posY, dx, dy, wall) {
-    const segments = typeof wall.getSegments === 'function'
-      ? wall.getSegments()
-      : [[{ x: wall.x1, y: wall.y1 }, { x: wall.x2, y: wall.y2 }]];
-
-    let closestDistance = null;
-
-    for (let index = 0; index < segments.length; index++) {
-      const segment = segments[index];
-      const distance = this.intersectSegment(posX, posY, dx, dy, segment[0].x, segment[0].y, segment[1].x, segment[1].y);
-      if (distance !== null && (closestDistance === null || distance < closestDistance)) {
-        closestDistance = distance;
-      }
-    }
-
-    return closestDistance;
-  }
-
-  intersectSegment(posX, posY, dx, dy, x1, y1, x2, y2) {
-    const x4 = posX + dx;
-    const y4 = posY + dy;
-
-    const den = ((x1 - x2) * (posY - y4)) - ((y1 - y2) * (posX - x4));
-    if (den === 0) {
-      return null;
-    }
-
-    const t = (((x1 - posX) * (posY - y4)) - ((y1 - posY) * (posX - x4))) / den;
-    const u = -(((x1 - x2) * (y1 - posY)) - ((y1 - y2) * (x1 - posX))) / den;
-
-    if (t > 0 && t < 1 && u > 0) {
-      return u;
-    }
-
-    return null;
-  }
-
   show() {
-    fill(255);
-    noStroke();
-    ellipse(this.pos.x, this.pos.y, 6);
+    push();
+    const closeC = (typeof colorCloseRgb !== 'undefined') ? colorCloseRgb : { r: 255, g: 115, b: 26 };
+    fill(closeC.r, closeC.g, closeC.b);
+    stroke(255, 180);
+    strokeWeight(1.5);
+    ellipse(this.pos.x, this.pos.y, 8);
+    pop();
   }
 }
