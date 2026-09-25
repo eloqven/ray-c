@@ -20,8 +20,10 @@ const defaultSettings = {
   overflowMode: 'transparent',
   overflowOpacity: 0.35,
   showHUD: true,
-  chromaSlope: 1.10,
+  chromaPos: 0.50,
   linkFishEyeChroma: true,
+  opacityStart: 0.20,
+  opacityEnd: 0.85,
   magnitude: 1
 };
 
@@ -123,8 +125,12 @@ function loadSettings() {
   }
   if (settings.overflowOpacity === undefined) settings.overflowOpacity = (settings.overflowMode === 'solid' ? 1.0 : 0.35);
   if (settings.showHUD === undefined) settings.showHUD = true;
-  if (settings.chromaSlope === undefined) settings.chromaSlope = defaultSettings.chromaSlope;
+  if (settings.chromaPos === undefined) settings.chromaPos = defaultSettings.chromaPos;
   if (settings.linkFishEyeChroma === undefined) settings.linkFishEyeChroma = defaultSettings.linkFishEyeChroma;
+  if (settings.opacityStart === undefined) settings.opacityStart = defaultSettings.opacityStart;
+  if (settings.opacityEnd === undefined) settings.opacityEnd = defaultSettings.opacityEnd;
+  settings.opacityStart = constrain(settings.opacityStart, 0.0, 0.98);
+  settings.opacityEnd = constrain(settings.opacityEnd, settings.opacityStart + 0.01, 1.0);
   if (settings.magnitude === undefined || !orderMagnitudes.includes(settings.magnitude)) {
     sliderMagnitude = 1;
   } else {
@@ -237,8 +243,10 @@ function saveSettings() {
       overflowMode: settings.overflowMode,
       overflowOpacity: settings.overflowOpacity,
       showHUD: (settings.showHUD !== false),
-      chromaSlope: settings.chromaSlope,
+      chromaPos: settings.chromaPos,
       linkFishEyeChroma: (settings.linkFishEyeChroma !== false),
+      opacityStart: settings.opacityStart,
+      opacityEnd: settings.opacityEnd,
       magnitude: sliderMagnitude
     });
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(dataToSave));
@@ -408,7 +416,7 @@ function updateSliderSteps() {
   // Update modal inputs to 'any' as well
   const modalSliders = [
     'modal-split-slider', 'modal-walls-slider', 'modal-curve-slider', 'modal-gravity-slider',
-    'modal-fisheye-slider', 'modal-chroma-slope-slider', 'modal-radius-slider', 'modal-escape-slider'
+    'modal-fisheye-slider', 'modal-chroma-pos-slider', 'modal-radius-slider', 'modal-escape-slider'
   ];
   for (let id of modalSliders) {
     const el = document.getElementById(id);
@@ -551,6 +559,41 @@ function syncOverflowUI() {
       btn.classList.remove('active');
     }
   });
+
+  syncOpacityIntervalUI();
+}
+
+function syncOpacityIntervalUI() {
+  const startSlider = document.getElementById('modal-opacity-start-slider');
+  const endSlider = document.getElementById('modal-opacity-end-slider');
+  const highlight = document.getElementById('modal-opacity-highlight-bar');
+  const intervalLabel = document.getElementById('modal-opacity-interval-label');
+  const statsLabel = document.getElementById('modal-opacity-stats-label');
+  const container = document.getElementById('modal-opacity-gradient-container');
+
+  const sVal = Math.round((settings.opacityStart !== undefined ? settings.opacityStart : 0.20) * 100);
+  const eVal = Math.round((settings.opacityEnd !== undefined ? settings.opacityEnd : 0.85) * 100);
+
+  if (startSlider) startSlider.value = sVal;
+  if (endSlider) endSlider.value = eVal;
+  if (highlight) {
+    highlight.style.left = `${sVal}%`;
+    highlight.style.width = `${Math.max(1, eVal - sVal)}%`;
+  }
+
+  const span = eVal - sVal;
+  const mid = ((sVal + eVal) / 2).toFixed(1);
+  const isSolid = (settings.overflowMode === 'solid');
+
+  if (intervalLabel) {
+    intervalLabel.textContent = `Fade: ${sVal}% → ${eVal}%${isSolid ? ' (Solid Active)' : ''}`;
+  }
+  if (statsLabel) {
+    statsLabel.textContent = `Position: ${mid}% | Sharpness: ${span}% span`;
+  }
+  if (container) {
+    container.style.opacity = isSolid ? '0.6' : '1.0';
+  }
 }
 
 function setHUDVisible(visible) {
@@ -583,31 +626,31 @@ function toggleHUD() {
   showSaveToast(settings.showHUD ? '👁️ HUD & Controls Displayed' : '🙈 HUD & Controls Hidden (Press H to restore)');
 }
 
-function getEffectiveChromaSlope() {
+function getEffectiveChromaPos() {
   if (settings.linkFishEyeChroma !== false) {
     const fe = (typeof sliderFishEye !== 'undefined' && sliderFishEye) ? sliderFishEye.value() : (settings.fishEye || 0);
-    return +(1.10 + fe * 0.45).toFixed(2);
+    return +(0.45 + fe * 0.20).toFixed(2);
   }
-  return settings.chromaSlope !== undefined ? settings.chromaSlope : 1.10;
+  return settings.chromaPos !== undefined ? settings.chromaPos : 0.50;
 }
 
 function syncChromaUI() {
   const isLinked = (settings.linkFishEyeChroma !== false);
-  const slope = getEffectiveChromaSlope();
+  const pos = getEffectiveChromaPos();
 
   const linkCb = document.getElementById('modal-link-chroma-checkbox');
   if (linkCb) linkCb.checked = isLinked;
 
-  const slopeSlider = document.getElementById('modal-chroma-slope-slider');
-  if (slopeSlider) {
-    slopeSlider.value = slope;
-    slopeSlider.disabled = isLinked;
-    slopeSlider.style.opacity = isLinked ? '0.6' : '1.0';
+  const posSlider = document.getElementById('modal-chroma-pos-slider');
+  if (posSlider) {
+    posSlider.value = pos;
+    posSlider.disabled = isLinked;
+    posSlider.style.opacity = isLinked ? '0.6' : '1.0';
   }
 
-  const slopeLabel = document.getElementById('modal-chroma-slope-label');
-  if (slopeLabel) {
-    slopeLabel.textContent = `${slope.toFixed(2)}x${isLinked ? ' (Merged)' : ''}`;
+  const posLabel = document.getElementById('modal-chroma-pos-label');
+  if (posLabel) {
+    posLabel.textContent = `${Math.round(pos * 100)}% Depth${isLinked ? ' (Merged)' : ''}`;
   }
 }
 
@@ -799,6 +842,27 @@ function onGlobalKeyDown(e) {
       selectSliderByIndex(targetIdx);
       return;
     }
+  }
+
+  // Keys '[' and ']' adjust the vertical opacity gradient interval
+  if (!e.ctrlKey && !e.altKey && (e.code === 'BracketLeft' || e.code === 'BracketRight' || e.key === '[' || e.key === ']')) {
+    e.preventDefault();
+    const isLeft = (e.code === 'BracketLeft' || e.key === '[');
+    let sVal = Math.round((settings.opacityStart !== undefined ? settings.opacityStart : 0.20) * 100);
+    let eVal = Math.round((settings.opacityEnd !== undefined ? settings.opacityEnd : 0.85) * 100);
+    const delta = e.shiftKey ? -5 : 5;
+
+    if (isLeft) {
+      sVal = constrain(sVal + delta, 0, eVal - 1);
+      settings.opacityStart = sVal / 100.0;
+    } else {
+      eVal = constrain(eVal + delta, sVal + 1, 100);
+      settings.opacityEnd = eVal / 100.0;
+    }
+    saveSettings();
+    syncOpacityIntervalUI();
+    showSaveToast(`Fade Interval: ${sVal}% → ${eVal}%`);
+    return;
   }
 
   // Tab key cycles active slider and focuses it
@@ -1033,7 +1097,7 @@ function initModalListeners() {
       if (modalFishEyeLabel) modalFishEyeLabel.textContent = `${Math.round(val * 100)}%${val === 0 ? ' (Flat Corrected)' : ''}`;
       if (sliderFishEye) sliderFishEye.value(val);
       if (settings.linkFishEyeChroma !== false) {
-        settings.chromaSlope = +(1.10 + val * 0.45).toFixed(2);
+        settings.chromaPos = +(0.45 + val * 0.20).toFixed(2);
       }
       saveSettings();
       syncChromaUI();
@@ -1045,21 +1109,76 @@ function initModalListeners() {
     modalLinkChromaCheckbox.addEventListener('change', (e) => {
       settings.linkFishEyeChroma = e.target.checked;
       if (settings.linkFishEyeChroma) {
-        settings.chromaSlope = getEffectiveChromaSlope();
+        settings.chromaPos = getEffectiveChromaPos();
       }
       saveSettings();
       syncChromaUI();
     });
   }
 
-  const modalChromaSlopeSlider = document.getElementById('modal-chroma-slope-slider');
-  if (modalChromaSlopeSlider) {
-    modalChromaSlopeSlider.addEventListener('input', (e) => {
+  const modalChromaPosSlider = document.getElementById('modal-chroma-pos-slider');
+  if (modalChromaPosSlider) {
+    modalChromaPosSlider.addEventListener('input', (e) => {
       const val = parseFloat(e.target.value);
-      settings.chromaSlope = val;
+      settings.chromaPos = val;
       settings.linkFishEyeChroma = false;
       saveSettings();
       syncChromaUI();
+    });
+  }
+
+  const startOpacitySlider = document.getElementById('modal-opacity-start-slider');
+  const endOpacitySlider = document.getElementById('modal-opacity-end-slider');
+  const opacityWrapper = document.getElementById('modal-opacity-wrapper');
+
+  function handleOpacityInput(source) {
+    if (!startOpacitySlider || !endOpacitySlider) return;
+    let sVal = parseInt(startOpacitySlider.value, 10);
+    let eVal = parseInt(endOpacitySlider.value, 10);
+
+    if (source === 'start') {
+      if (sVal >= eVal) {
+        sVal = Math.max(0, eVal - 1);
+        startOpacitySlider.value = sVal;
+      }
+      startOpacitySlider.style.zIndex = '15';
+      endOpacitySlider.style.zIndex = '10';
+    } else if (source === 'end') {
+      if (eVal <= sVal) {
+        eVal = Math.min(100, sVal + 1);
+        endOpacitySlider.value = eVal;
+      }
+      endOpacitySlider.style.zIndex = '15';
+      startOpacitySlider.style.zIndex = '10';
+    }
+
+    settings.opacityStart = sVal / 100.0;
+    settings.opacityEnd = eVal / 100.0;
+    saveSettings();
+    syncOpacityIntervalUI();
+  }
+
+  if (startOpacitySlider) {
+    startOpacitySlider.addEventListener('input', () => handleOpacityInput('start'));
+  }
+  if (endOpacitySlider) {
+    endOpacitySlider.addEventListener('input', () => handleOpacityInput('end'));
+  }
+
+  if (opacityWrapper) {
+    opacityWrapper.addEventListener('click', (e) => {
+      if (e.target === startOpacitySlider || e.target === endOpacitySlider) return;
+      const rect = opacityWrapper.getBoundingClientRect();
+      const clickPct = Math.round(Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)) * 100);
+      let sVal = parseInt(startOpacitySlider.value, 10);
+      let eVal = parseInt(endOpacitySlider.value, 10);
+      if (Math.abs(clickPct - sVal) < Math.abs(clickPct - eVal)) {
+        startOpacitySlider.value = Math.min(clickPct, eVal - 1);
+        handleOpacityInput('start');
+      } else {
+        endOpacitySlider.value = Math.max(clickPct, sVal + 1);
+        handleOpacityInput('end');
+      }
     });
   }
 
@@ -1135,9 +1254,11 @@ function initModalListeners() {
         settings.showHUD = modalHudCheckbox.checked;
       }
       const linkChromaCb = document.getElementById('modal-link-chroma-checkbox');
-      const chromaSlider = document.getElementById('modal-chroma-slope-slider');
+      const chromaSlider = document.getElementById('modal-chroma-pos-slider');
       if (linkChromaCb) settings.linkFishEyeChroma = linkChromaCb.checked;
-      if (chromaSlider) settings.chromaSlope = parseFloat(chromaSlider.value);
+      if (chromaSlider) settings.chromaPos = parseFloat(chromaSlider.value);
+      if (startOpacitySlider) settings.opacityStart = parseInt(startOpacitySlider.value, 10) / 100.0;
+      if (endOpacitySlider) settings.opacityEnd = parseInt(endOpacitySlider.value, 10) / 100.0;
       saveSettings();
       window.location.reload();
     });
@@ -1164,9 +1285,11 @@ function initModalListeners() {
         setHUDVisible(modalHudCheckbox.checked);
       }
       const linkChromaCb = document.getElementById('modal-link-chroma-checkbox');
-      const chromaSlider = document.getElementById('modal-chroma-slope-slider');
+      const chromaSlider = document.getElementById('modal-chroma-pos-slider');
       if (linkChromaCb) settings.linkFishEyeChroma = linkChromaCb.checked;
-      if (chromaSlider) settings.chromaSlope = parseFloat(chromaSlider.value);
+      if (chromaSlider) settings.chromaPos = parseFloat(chromaSlider.value);
+      if (startOpacitySlider) settings.opacityStart = parseInt(startOpacitySlider.value, 10) / 100.0;
+      if (endOpacitySlider) settings.opacityEnd = parseInt(endOpacitySlider.value, 10) / 100.0;
       if (singularity) {
         singularity.mass = settings.gravityMass;
         singularity.radius = settings.singularityRadius;
@@ -1181,6 +1304,7 @@ function initModalListeners() {
       if (sliderOverflow) sliderOverflow.value(settings.overflowMode === 'solid' ? 1 : 0);
       syncOverflowUI();
       syncChromaUI();
+      syncOpacityIntervalUI();
       applyLiveLayout();
       modal.classList.add('hidden');
     });
@@ -1231,7 +1355,7 @@ function onFishEyeChanged() {
   const fishVal = sliderFishEye.value();
   settings.fishEye = fishVal;
   if (settings.linkFishEyeChroma !== false) {
-    settings.chromaSlope = +(1.10 + fishVal * 0.45).toFixed(2);
+    settings.chromaPos = +(0.45 + fishVal * 0.20).toFixed(2);
   }
   saveSettings();
   syncChromaUI();
@@ -1546,23 +1670,28 @@ function draw() {
           fill(55, 255, 225, 180);
           rect(xStart, topY, colWidth, 2);
         } else {
-          // Transparent Mode: Atmospheric fade-out gradient (100% solid black at split line y=0, fading smoothly to 0% transparent upwards)
+          // Transparent Mode: Atmospheric fade-out gradient with 2-way interval controls (sharpness & position)
           const maxOverflow = Math.min(-topY, sceneH);
           const fadeH = maxOverflow;
-          const grad = drawingContext.createLinearGradient(0, -fadeH, 0, 0);
-          grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-          grad.addColorStop(1, 'rgba(0, 0, 0, 1)');
+          const vStart = Math.min(settings.opacityStart !== undefined ? settings.opacityStart : 0.20, 0.98);
+          const vEnd = Math.max(settings.opacityEnd !== undefined ? settings.opacityEnd : 0.85, vStart + 0.01);
+
+          const grad = drawingContext.createLinearGradient(0, 0, 0, -fadeH);
+          grad.addColorStop(0, 'rgba(0, 0, 0, 1)');
+          grad.addColorStop(constrain(vStart, 0, 1), 'rgba(0, 0, 0, 1)');
+          grad.addColorStop(constrain(vEnd, 0, 1), 'rgba(0, 0, 0, 0)');
+          grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
           drawingContext.fillStyle = grad;
           drawingContext.fillRect(xStart, -fadeH, colWidth, fadeH);
         }
       }
     } else {
       // Distance falloff factor t (0 for close wall, 1 for far wall)
-      // Equilibriated Chroma Depth Gradient with slope linked to Fish Eye (2 merging behaviours)
-      const effectiveSlope = getEffectiveChromaSlope();
-      const refDist = maxDist * 0.58;
-      const u = constrain(d / refDist, 0, 1);
-      const t = constrain(Math.pow(u, 1.0 / effectiveSlope), 0, 1);
+      // Equilibriated Chroma Depth Gradient with position linked to Fish Eye (2 merging behaviours)
+      const chromaPos = getEffectiveChromaPos();
+      const refSpan = Math.max(1, 2 * chromaPos * maxDist);
+      const x = constrain(d / refSpan, 0, 1);
+      const t = x * x * (3 - 2 * x); // Hermite smoothstep centered at chromaPos * maxDist
 
       // Smooth depth gradient between Close Wall Color and Far Wall Color
       const red = Math.round(lerp(colorCloseRgb.r, colorFarRgb.r, t));
@@ -1590,12 +1719,17 @@ function draw() {
           fill(red, green, blue);
           rect(xStart, topY, colWidth, -topY);
         } else {
-          // Transparent Mode: Atmospheric fade-out gradient (100% solid wall color at split line y=0, fading smoothly to 0% transparent upwards)
+          // Transparent Mode: Atmospheric fade-out gradient with 2-way interval controls (sharpness & position)
           const maxOverflow = Math.min(-topY, sceneH);
           const fadeH = maxOverflow;
-          const grad = drawingContext.createLinearGradient(0, -fadeH, 0, 0);
-          grad.addColorStop(0, `rgba(${red}, ${green}, ${blue}, 0)`);
-          grad.addColorStop(1, `rgba(${red}, ${green}, ${blue}, 1)`);
+          const vStart = Math.min(settings.opacityStart !== undefined ? settings.opacityStart : 0.20, 0.98);
+          const vEnd = Math.max(settings.opacityEnd !== undefined ? settings.opacityEnd : 0.85, vStart + 0.01);
+
+          const grad = drawingContext.createLinearGradient(0, 0, 0, -fadeH);
+          grad.addColorStop(0, `rgba(${red}, ${green}, ${blue}, 1)`);
+          grad.addColorStop(constrain(vStart, 0, 1), `rgba(${red}, ${green}, ${blue}, 1)`);
+          grad.addColorStop(constrain(vEnd, 0, 1), `rgba(${red}, ${green}, ${blue}, 0)`);
+          grad.addColorStop(1, `rgba(${red}, ${green}, ${blue}, 0)`);
           drawingContext.fillStyle = grad;
           drawingContext.fillRect(xStart, -fadeH, colWidth, fadeH);
         }
@@ -1634,10 +1768,10 @@ function renderHUD() {
     `[5] Split: ${sliderSplit.value()}% Top / ${100 - sliderSplit.value()}% 3D`,
     `[6] Curve: ${sliderCurve.value() > 0 ? '+' : ''}${sliderCurve.value()}°`,
     `[7] Gravity: ${sliderGravity.value() > 0 ? sliderGravity.value() + ' M' : '0 (Off)'}`,
-    `[8] Fish Eye: ${Math.round(sliderFishEye.value() * 100)}%${sliderFishEye.value() === 0 ? ' (Flat)' : ''}${settings.linkFishEyeChroma !== false ? ' [Chroma Merged]' : ''}`,
+    `[8] Fish Eye: ${Math.round(sliderFishEye.value() * 100)}%${sliderFishEye.value() === 0 ? ' (Flat)' : ''}${settings.linkFishEyeChroma !== false ? ' [Chroma Pos Merged]' : ''}`,
     `[9] Singularity: ${sliderRadius.value()}px${sliderRadius.value() === 0 ? ' (0px: Orbit)' : ' (Eats)'}`,
     `[0] Escape Drift: ${sliderEscape.value().toFixed(2)}${sliderEscape.value() === 0 ? ' (Closed)' : ' (Spiral)'}`,
-    `[-] Overflow: ${settings.overflowMode === 'solid' ? 'Solid 100%' : 'Transparent'}`
+    `[-] Overflow: ${settings.overflowMode === 'solid' ? 'Solid 100%' : 'Fade: ' + Math.round((settings.opacityStart !== undefined ? settings.opacityStart : 0.20) * 100) + '%→' + Math.round((settings.opacityEnd !== undefined ? settings.opacityEnd : 0.85) * 100) + '%'}`
   ];
 
   for (let idx = 0; idx < sliderLabels.length; idx++) {
