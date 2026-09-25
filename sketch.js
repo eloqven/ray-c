@@ -71,7 +71,7 @@ var tapHistory = {
   ArrowRight: []
 };
 
-const orderMagnitudes = [0.001, 0.01, 0.1, 1, 10, 100];
+const orderMagnitudes = [10, 1, 0.1, 0.01, 0.001, 0.0001, 100];
 var sliderMagnitude = 1;
 
 var averageFPS = 60;
@@ -391,6 +391,7 @@ function setSliderMagnitude(mag) {
   saveSettings();
   const magBadge = document.getElementById('modal-step-badge');
   if (magBadge) magBadge.textContent = `${sliderMagnitude}x`;
+  showSaveToast(`Step Magnitude: ${sliderMagnitude}x`);
 }
 
 function updateSliderSteps() {
@@ -778,18 +779,18 @@ function onGlobalKeyDown(e) {
     }
   }
 
-  // Shift + 1..6 for direct magnitude selection (0.001x, 0.01x, 0.1x, 1x, 10x, 100x)
+  // Shift + 1..6 for direct magnitude selection (10x coarse down to 0.0001x ultra-fine)
   if (e.shiftKey && !e.ctrlKey && !e.altKey) {
     if (e.code === 'Digit1' || e.key === '!' || e.key === '1') {
       e.preventDefault();
       stopAutoSlide();
-      setSliderMagnitude(0.001);
+      setSliderMagnitude(10);
       return;
     }
     if (e.code === 'Digit2' || e.key === '@' || e.key === '2') {
       e.preventDefault();
       stopAutoSlide();
-      setSliderMagnitude(0.01);
+      setSliderMagnitude(1);
       return;
     }
     if (e.code === 'Digit3' || e.key === '#' || e.key === '3') {
@@ -801,19 +802,19 @@ function onGlobalKeyDown(e) {
     if (e.code === 'Digit4' || e.key === '$' || e.key === '4') {
       e.preventDefault();
       stopAutoSlide();
-      setSliderMagnitude(1);
+      setSliderMagnitude(0.01);
       return;
     }
     if (e.code === 'Digit5' || e.key === '%' || e.key === '5') {
       e.preventDefault();
       stopAutoSlide();
-      setSliderMagnitude(10);
+      setSliderMagnitude(0.001);
       return;
     }
     if (e.code === 'Digit6' || e.key === '^' || e.key === '6') {
       e.preventDefault();
       stopAutoSlide();
-      setSliderMagnitude(100);
+      setSliderMagnitude(0.0001);
       return;
     }
   }
