@@ -455,6 +455,19 @@
           <input type="range" id="modal-fisheye-slider" min="0" max="2" step="0.05" value="0" style="width: 100%; margin-top: 8px;">
         </div>
 
+        <!-- Setting 5b: Distance-to-Chroma Gradient Slope (Linked to Fish Eye) -->
+        <div class="setting-item" style="border-left: 3px solid #37ffe1; padding-left: 12px; margin-top: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" id="modal-link-chroma-checkbox" checked style="width: 18px; height: 18px; accent-color: #37ffe1; cursor: pointer;">
+              <label for="modal-link-chroma-checkbox" style="cursor: pointer; margin: 0; font-weight: 600;">Link Chroma Slope to Fish Eye (2 Merging Behaviours)</label>
+            </div>
+            <span id="modal-chroma-slope-label" style="font-size: 13px; color: #37ffe1; font-weight: 600;">1.10x (Merged)</span>
+          </div>
+          <p class="setting-desc">Equilibriates distance-to-chroma gradient so near walls blend smoothly into far colors. When linked, Fish Eye drives both lens curvature and chroma falloff:</p>
+          <input type="range" id="modal-chroma-slope-slider" min="0.3" max="2.5" step="0.05" value="1.1" style="width: 100%; margin-top: 8px;">
+        </div>
+
         <!-- Setting 6: Black Hole Event Horizon Radius (Eating vs Orbiting) -->
         <div class="setting-item">
           <div style="display: flex; justify-content: space-between; align-items: center;">

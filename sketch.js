@@ -20,6 +20,8 @@ const defaultSettings = {
   overflowMode: 'transparent',
   overflowOpacity: 0.35,
   showHUD: true,
+  chromaSlope: 1.10,
+  linkFishEyeChroma: true,
   magnitude: 1
 };
 
@@ -121,6 +123,8 @@ function loadSettings() {
   }
   if (settings.overflowOpacity === undefined) settings.overflowOpacity = (settings.overflowMode === 'solid' ? 1.0 : 0.35);
   if (settings.showHUD === undefined) settings.showHUD = true;
+  if (settings.chromaSlope === undefined) settings.chromaSlope = defaultSettings.chromaSlope;
+  if (settings.linkFishEyeChroma === undefined) settings.linkFishEyeChroma = defaultSettings.linkFishEyeChroma;
   if (settings.magnitude === undefined || !orderMagnitudes.includes(settings.magnitude)) {
     sliderMagnitude = 1;
   } else {
@@ -233,6 +237,8 @@ function saveSettings() {
       overflowMode: settings.overflowMode,
       overflowOpacity: settings.overflowOpacity,
       showHUD: (settings.showHUD !== false),
+      chromaSlope: settings.chromaSlope,
+      linkFishEyeChroma: (settings.linkFishEyeChroma !== false),
       magnitude: sliderMagnitude
     });
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(dataToSave));
@@ -402,7 +408,7 @@ function updateSliderSteps() {
   // Update modal inputs to 'any' as well
   const modalSliders = [
     'modal-split-slider', 'modal-walls-slider', 'modal-curve-slider', 'modal-gravity-slider',
-    'modal-fisheye-slider', 'modal-radius-slider', 'modal-escape-slider'
+    'modal-fisheye-slider', 'modal-chroma-slope-slider', 'modal-radius-slider', 'modal-escape-slider'
   ];
   for (let id of modalSliders) {
     const el = document.getElementById(id);
@@ -575,6 +581,34 @@ function setHUDVisible(visible) {
 function toggleHUD() {
   setHUDVisible(!settings.showHUD);
   showSaveToast(settings.showHUD ? '👁️ HUD & Controls Displayed' : '🙈 HUD & Controls Hidden (Press H to restore)');
+}
+
+function getEffectiveChromaSlope() {
+  if (settings.linkFishEyeChroma !== false) {
+    const fe = (typeof sliderFishEye !== 'undefined' && sliderFishEye) ? sliderFishEye.value() : (settings.fishEye || 0);
+    return +(1.10 + fe * 0.45).toFixed(2);
+  }
+  return settings.chromaSlope !== undefined ? settings.chromaSlope : 1.10;
+}
+
+function syncChromaUI() {
+  const isLinked = (settings.linkFishEyeChroma !== false);
+  const slope = getEffectiveChromaSlope();
+
+  const linkCb = document.getElementById('modal-link-chroma-checkbox');
+  if (linkCb) linkCb.checked = isLinked;
+
+  const slopeSlider = document.getElementById('modal-chroma-slope-slider');
+  if (slopeSlider) {
+    slopeSlider.value = slope;
+    slopeSlider.disabled = isLinked;
+    slopeSlider.style.opacity = isLinked ? '0.6' : '1.0';
+  }
+
+  const slopeLabel = document.getElementById('modal-chroma-slope-label');
+  if (slopeLabel) {
+    slopeLabel.textContent = `${slope.toFixed(2)}x${isLinked ? ' (Merged)' : ''}`;
+  }
 }
 
 function onOverflowChanged() {
@@ -891,6 +925,7 @@ function initModalListeners() {
     if (modalEscapeLabel) modalEscapeLabel.textContent = `${settings.escapeFactor.toFixed(2)}${settings.escapeFactor === 0 ? ' (Closed Orbit)' : ' (Spiral Outward)'}`;
 
     syncOverflowUI();
+    syncChromaUI();
 
     const modalHudCheckbox = document.getElementById('modal-hud-checkbox');
     if (modalHudCheckbox) modalHudCheckbox.checked = (settings.showHUD !== false);
@@ -997,7 +1032,34 @@ function initModalListeners() {
       settings.fishEye = val;
       if (modalFishEyeLabel) modalFishEyeLabel.textContent = `${Math.round(val * 100)}%${val === 0 ? ' (Flat Corrected)' : ''}`;
       if (sliderFishEye) sliderFishEye.value(val);
+      if (settings.linkFishEyeChroma !== false) {
+        settings.chromaSlope = +(1.10 + val * 0.45).toFixed(2);
+      }
       saveSettings();
+      syncChromaUI();
+    });
+  }
+
+  const modalLinkChromaCheckbox = document.getElementById('modal-link-chroma-checkbox');
+  if (modalLinkChromaCheckbox) {
+    modalLinkChromaCheckbox.addEventListener('change', (e) => {
+      settings.linkFishEyeChroma = e.target.checked;
+      if (settings.linkFishEyeChroma) {
+        settings.chromaSlope = getEffectiveChromaSlope();
+      }
+      saveSettings();
+      syncChromaUI();
+    });
+  }
+
+  const modalChromaSlopeSlider = document.getElementById('modal-chroma-slope-slider');
+  if (modalChromaSlopeSlider) {
+    modalChromaSlopeSlider.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      settings.chromaSlope = val;
+      settings.linkFishEyeChroma = false;
+      saveSettings();
+      syncChromaUI();
     });
   }
 
@@ -1072,6 +1134,10 @@ function initModalListeners() {
       if (modalHudCheckbox) {
         settings.showHUD = modalHudCheckbox.checked;
       }
+      const linkChromaCb = document.getElementById('modal-link-chroma-checkbox');
+      const chromaSlider = document.getElementById('modal-chroma-slope-slider');
+      if (linkChromaCb) settings.linkFishEyeChroma = linkChromaCb.checked;
+      if (chromaSlider) settings.chromaSlope = parseFloat(chromaSlider.value);
       saveSettings();
       window.location.reload();
     });
@@ -1097,6 +1163,10 @@ function initModalListeners() {
       if (modalHudCheckbox) {
         setHUDVisible(modalHudCheckbox.checked);
       }
+      const linkChromaCb = document.getElementById('modal-link-chroma-checkbox');
+      const chromaSlider = document.getElementById('modal-chroma-slope-slider');
+      if (linkChromaCb) settings.linkFishEyeChroma = linkChromaCb.checked;
+      if (chromaSlider) settings.chromaSlope = parseFloat(chromaSlider.value);
       if (singularity) {
         singularity.mass = settings.gravityMass;
         singularity.radius = settings.singularityRadius;
@@ -1110,6 +1180,7 @@ function initModalListeners() {
       if (sliderEscape) sliderEscape.value(settings.escapeFactor);
       if (sliderOverflow) sliderOverflow.value(settings.overflowMode === 'solid' ? 1 : 0);
       syncOverflowUI();
+      syncChromaUI();
       applyLiveLayout();
       modal.classList.add('hidden');
     });
@@ -1159,7 +1230,11 @@ function onGravityChanged() {
 function onFishEyeChanged() {
   const fishVal = sliderFishEye.value();
   settings.fishEye = fishVal;
+  if (settings.linkFishEyeChroma !== false) {
+    settings.chromaSlope = +(1.10 + fishVal * 0.45).toFixed(2);
+  }
   saveSettings();
+  syncChromaUI();
 }
 
 function onRadiusChanged() {
@@ -1483,7 +1558,11 @@ function draw() {
       }
     } else {
       // Distance falloff factor t (0 for close wall, 1 for far wall)
-      const t = constrain(sq / (wSq / 2.5), 0, 1);
+      // Equilibriated Chroma Depth Gradient with slope linked to Fish Eye (2 merging behaviours)
+      const effectiveSlope = getEffectiveChromaSlope();
+      const refDist = maxDist * 0.58;
+      const u = constrain(d / refDist, 0, 1);
+      const t = constrain(Math.pow(u, 1.0 / effectiveSlope), 0, 1);
 
       // Smooth depth gradient between Close Wall Color and Far Wall Color
       const red = Math.round(lerp(colorCloseRgb.r, colorFarRgb.r, t));
@@ -1555,7 +1634,7 @@ function renderHUD() {
     `[5] Split: ${sliderSplit.value()}% Top / ${100 - sliderSplit.value()}% 3D`,
     `[6] Curve: ${sliderCurve.value() > 0 ? '+' : ''}${sliderCurve.value()}°`,
     `[7] Gravity: ${sliderGravity.value() > 0 ? sliderGravity.value() + ' M' : '0 (Off)'}`,
-    `[8] Fish Eye: ${Math.round(sliderFishEye.value() * 100)}%${sliderFishEye.value() === 0 ? ' (Flat)' : ''}`,
+    `[8] Fish Eye: ${Math.round(sliderFishEye.value() * 100)}%${sliderFishEye.value() === 0 ? ' (Flat)' : ''}${settings.linkFishEyeChroma !== false ? ' [Chroma Merged]' : ''}`,
     `[9] Singularity: ${sliderRadius.value()}px${sliderRadius.value() === 0 ? ' (0px: Orbit)' : ' (Eats)'}`,
     `[0] Escape Drift: ${sliderEscape.value().toFixed(2)}${sliderEscape.value() === 0 ? ' (Closed)' : ' (Spiral)'}`,
     `[-] Overflow: ${settings.overflowMode === 'solid' ? 'Solid 100%' : 'Transparent'}`
