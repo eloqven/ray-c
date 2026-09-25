@@ -702,6 +702,79 @@
           <p class="setting-desc">Automatically saves all slider settings and game state every 30 seconds with an on-screen toast confirmation:</p>
         </div>
 
+        <!-- Setting 11: Randomizer Scope & Affected Sliders (Alt+Shift+R) -->
+        <div class="setting-item" style="border-left: 3px solid #ffaa00; padding-left: 12px; margin-top: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <label style="margin: 0; font-weight: 600;">🎲 Randomizer Scope (Alt+Shift+R Targets)</label>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span id="modal-rand-count-badge" style="font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; background: rgba(255, 170, 0, 0.15); color: #ffaa00;">14 / 14 Active</span>
+              <button type="button" id="btn-rand-all" class="btn btn-secondary" style="padding: 2px 6px; font-size: 10px; cursor: pointer;">All</button>
+              <button type="button" id="btn-rand-none" class="btn btn-secondary" style="padding: 2px 6px; font-size: 10px; cursor: pointer;">None</button>
+            </div>
+          </div>
+          <p class="setting-desc">Sliders and parameters affected by <kbd style="background: #222d3d; padding: 2px 6px; border-radius: 4px; border: 1px solid #4a5568; color: #fff;">Alt+Shift+R</kbd> (strictly randomized within normal uncranked bounds):</p>
+          <div id="randomizer-targets-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 10px; margin-top: 8px; background: rgba(10, 15, 25, 0.4); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255, 170, 0, 0.2);">
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer; margin: 0; color: #e2e8f0;">
+              <input type="checkbox" class="rand-target-cb" data-key="fov" checked style="accent-color: #ffaa00; cursor: pointer;">
+              <span>[1] FOV (25°..120°)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer; margin: 0; color: #e2e8f0;">
+              <input type="checkbox" class="rand-target-cb" data-key="density" checked style="accent-color: #ffaa00; cursor: pointer;">
+              <span>[2] Density (0.3..2.5)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer; margin: 0; color: #e2e8f0;">
+              <input type="checkbox" class="rand-target-cb" data-key="lodThreshold" checked style="accent-color: #ffaa00; cursor: pointer;">
+              <span>[3] LOD Dist (150..1800px)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer; margin: 0; color: #e2e8f0;">
+              <input type="checkbox" class="rand-target-cb" data-key="maxChunk" checked style="accent-color: #ffaa00; cursor: pointer;">
+              <span>[4] Max Chunk (1..12x)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer; margin: 0; color: #e2e8f0;">
+              <input type="checkbox" class="rand-target-cb" data-key="splitPercent" checked style="accent-color: #ffaa00; cursor: pointer;">
+              <span>[5] Screen Split (20%..80%)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer; margin: 0; color: #e2e8f0;">
+              <input type="checkbox" class="rand-target-cb" data-key="globalCurve" checked style="accent-color: #ffaa00; cursor: pointer;">
+              <span>[6] Curvature (-45°..+45°)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer; margin: 0; color: #e2e8f0;">
+              <input type="checkbox" class="rand-target-cb" data-key="gravityMass" checked style="accent-color: #ffaa00; cursor: pointer;">
+              <span>[7] Gravity (0..1800 M)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer; margin: 0; color: #e2e8f0;">
+              <input type="checkbox" class="rand-target-cb" data-key="fishEye" checked style="accent-color: #ffaa00; cursor: pointer;">
+              <span>[8] Fish Eye (0.0..1.5)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer; margin: 0; color: #e2e8f0;">
+              <input type="checkbox" class="rand-target-cb" data-key="singularityRadius" checked style="accent-color: #ffaa00; cursor: pointer;">
+              <span>[9] Singularity (0..35px)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer; margin: 0; color: #e2e8f0;">
+              <input type="checkbox" class="rand-target-cb" data-key="escapeFactor" checked style="accent-color: #ffaa00; cursor: pointer;">
+              <span>[0] Escape Drift (0.0..0.8)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer; margin: 0; color: #e2e8f0;">
+              <input type="checkbox" class="rand-target-cb" data-key="overflow" checked style="accent-color: #ffaa00; cursor: pointer;">
+              <span>[-] Overflow & Fade (0%..100%)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer; margin: 0; color: #e2e8f0;">
+              <input type="checkbox" class="rand-target-cb" data-key="chroma" checked style="accent-color: #ffaa00; cursor: pointer;">
+              <span>Chroma Depth (20%..80%)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer; margin: 0; color: #e2e8f0;">
+              <input type="checkbox" class="rand-target-cb" data-key="colors" checked style="accent-color: #ffaa00; cursor: pointer;">
+              <span>Colors (Close & Far Gradients)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer; margin: 0; color: #e2e8f0;">
+              <input type="checkbox" class="rand-target-cb" data-key="walls" checked style="accent-color: #ffaa00; cursor: pointer;">
+              <span>Wall Count (4..12)</span>
+            </label>
+          </div>
+        </div>
+
         <!-- Step Magnitude Controller -->
         <div class="setting-item" style="background: rgba(55, 255, 225, 0.05); padding: 10px; border-radius: 8px; border: 1px solid rgba(55, 255, 225, 0.2);">
           <div style="display: flex; justify-content: space-between; align-items: center;">

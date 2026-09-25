@@ -1,6 +1,23 @@
 // 2D Raycasting with 3D Column Projection, Adaptive LOD, Gravitational Lensing, Fish Eye & Order-of-Magnitude Sliders
 const SETTINGS_KEY = 'raycasting_engine_settings';
 
+const defaultRandomTargets = {
+  fov: true,
+  density: true,
+  lodThreshold: true,
+  maxChunk: true,
+  splitPercent: true,
+  globalCurve: true,
+  gravityMass: true,
+  fishEye: true,
+  singularityRadius: true,
+  escapeFactor: true,
+  overflow: true,
+  chroma: true,
+  colors: true,
+  walls: true
+};
+
 const defaultSettings = {
   splitPercent: 50,
   fov: 46,
@@ -25,7 +42,8 @@ const defaultSettings = {
   opacityStart: 0.20,
   opacityEnd: 0.85,
   magnitude: 1,
-  autoSave30s: false
+  autoSave30s: false,
+  randomTargets: Object.assign({}, defaultRandomTargets)
 };
 
 var settings = Object.assign({}, defaultSettings);
@@ -136,6 +154,11 @@ function loadSettings() {
   settings.opacityStart = constrain(settings.opacityStart, -0.30, 1.29);
   settings.opacityEnd = constrain(settings.opacityEnd, settings.opacityStart + 0.01, 1.30);
   if (settings.autoSave30s === undefined) settings.autoSave30s = false;
+  if (!settings.randomTargets || typeof settings.randomTargets !== 'object') {
+    settings.randomTargets = Object.assign({}, defaultRandomTargets);
+  } else {
+    settings.randomTargets = Object.assign({}, defaultRandomTargets, settings.randomTargets);
+  }
   if (settings.magnitude === undefined || !orderMagnitudes.includes(settings.magnitude)) {
     sliderMagnitude = 1;
   } else {
@@ -257,7 +280,8 @@ function saveSettings(force = false) {
       opacityStart: settings.opacityStart,
       opacityEnd: settings.opacityEnd,
       magnitude: sliderMagnitude,
-      autoSave30s: !!settings.autoSave30s
+      autoSave30s: !!settings.autoSave30s,
+      randomTargets: Object.assign({}, defaultRandomTargets, settings.randomTargets || {})
     });
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(dataToSave));
   } catch (e) {
@@ -803,99 +827,131 @@ function hslToHex(h, s, l) {
 }
 
 function randomizeSettings(saveImmediately = false) {
-  // 1. Generate randomized settings within sensible, aesthetic bounds
-  const randFov = Math.round(random(25, 95));
-  const randDensity = +(random(0.6, 2.5)).toFixed(2);
-  const randThreshold = Math.round(random(200, 1500));
-  const randMaxChunk = Math.round(random(2, 12));
-  const randSplit = Math.round(random(2, 8)) * 10;
-  const randCurve = +(random(-35, 35)).toFixed(1);
-  const randGravity = Math.round(random(100, 900));
-  const randFishEye = +(random(0.0, 1.2)).toFixed(2);
-  const randRadius = Math.round(random(8, 28));
-  const randEscape = +(random(0.05, 0.65)).toFixed(2);
-  const randOverflowMode = Math.random() > 0.5 ? 'solid' : 'transparent';
-  const randOverflowOpacity = (randOverflowMode === 'solid') ? 1.0 : +(random(0.2, 0.6)).toFixed(2);
+  const targets = Object.assign({}, defaultRandomTargets, settings.randomTargets || {});
+  let anyRandomized = false;
 
-  // Interval slider randomized (start < end)
-  const randStartPct = Math.round(random(-20, 40));
-  const randEndPct = Math.round(random(randStartPct + 25, 120));
-  const randOpacityStart = randStartPct / 100.0;
-  const randOpacityEnd = randEndPct / 100.0;
-
-  const randLinkChroma = Math.random() > 0.3;
-  const randChromaPos = +(random(0.25, 0.75)).toFixed(2);
-
-  // Vibrant close color and contrasting far color
-  const baseHue = Math.floor(random(0, 360));
-  const closeSat = Math.floor(random(75, 100));
-  const closeLit = Math.floor(random(45, 65));
-  const randCloseColor = hslToHex(baseHue, closeSat, closeLit);
-
-  const farHue = (baseHue + Math.floor(random(120, 240))) % 360;
-  const farSat = Math.floor(random(40, 90));
-  const farLit = Math.floor(random(6, 18));
-  const randFarColor = hslToHex(farHue, farSat, farLit);
-
-  const randWallCount = Math.round(random(5, 10));
-
-  // 2. Apply to settings object in memory WITHOUT saving to localStorage
-  settings.fov = randFov;
-  settings.density = randDensity;
-  settings.lodThreshold = randThreshold;
-  settings.maxChunk = randMaxChunk;
-  settings.splitPercent = randSplit;
-  settings.globalCurve = randCurve;
-  settings.gravityMass = randGravity;
-  settings.fishEye = randFishEye;
-  settings.singularityRadius = randRadius;
-  settings.escapeFactor = randEscape;
-  settings.overflowMode = randOverflowMode;
-  settings.overflowOpacity = randOverflowOpacity;
-  settings.opacityStart = randOpacityStart;
-  settings.opacityEnd = randOpacityEnd;
-  settings.linkFishEyeChroma = randLinkChroma;
-  settings.chromaPos = randChromaPos;
-  settings.closeColor = randCloseColor;
-  settings.farColor = randFarColor;
-  settings.wallCount = randWallCount;
-
-  colorCloseRgb = hexToRgb(settings.closeColor);
-  colorFarRgb = hexToRgb(settings.farColor);
-  window.colorCloseRgb = colorCloseRgb;
-  window.colorFarRgb = colorFarRgb;
-
-  // 3. Update sliders directly
-  if (sliderFOV) sliderFOV.value(settings.fov);
-  if (sliderDensity) sliderDensity.value(settings.density);
-  if (sliderThreshold) sliderThreshold.value(settings.lodThreshold);
-  if (sliderMaxChunk) sliderMaxChunk.value(settings.maxChunk);
-  if (sliderSplit) sliderSplit.value(settings.splitPercent);
-  if (sliderCurve) sliderCurve.value(settings.globalCurve);
-  if (sliderGravity) sliderGravity.value(settings.gravityMass);
-  if (sliderFishEye) sliderFishEye.value(settings.fishEye);
-  if (sliderRadius) sliderRadius.value(settings.singularityRadius);
-  if (sliderEscape) sliderEscape.value(settings.escapeFactor);
-  if (sliderOverflow) sliderOverflow.value(settings.overflowMode === 'solid' ? 1 : 0);
-
-  // 4. Update engine live objects
-  if (particle) {
-    particle.updateFOV(settings.fov);
-    particle.updateDensity(1 / settings.density);
+  // 1. Sliders & parameters randomized strictly within normal uncranked bounds:
+  if (targets.fov) {
+    settings.fov = Math.round(random(25, 120));
+    if (sliderFOV) sliderFOV.value(settings.fov);
+    if (particle) particle.updateFOV(settings.fov);
+    anyRandomized = true;
   }
-  if (singularity) {
-    singularity.mass = settings.gravityMass;
-    singularity.radius = settings.singularityRadius;
-  }
-  setWallCount(randWallCount, true); // skip save
 
-  // 5. Update UI controls (modal, indicators, sync methods)
+  if (targets.density) {
+    settings.density = +(random(0.3, 2.5)).toFixed(2);
+    if (sliderDensity) sliderDensity.value(settings.density);
+    if (particle) particle.updateDensity(1 / settings.density);
+    anyRandomized = true;
+  }
+
+  if (targets.lodThreshold) {
+    settings.lodThreshold = Math.round(random(150, 1800));
+    if (sliderThreshold) sliderThreshold.value(settings.lodThreshold);
+    anyRandomized = true;
+  }
+
+  if (targets.maxChunk) {
+    settings.maxChunk = Math.round(random(1, 12));
+    if (sliderMaxChunk) sliderMaxChunk.value(settings.maxChunk);
+    anyRandomized = true;
+  }
+
+  if (targets.splitPercent) {
+    settings.splitPercent = Math.round(random(2, 8)) * 10;
+    if (sliderSplit) sliderSplit.value(settings.splitPercent);
+    anyRandomized = true;
+  }
+
+  if (targets.globalCurve) {
+    settings.globalCurve = +(random(-45, 45)).toFixed(1);
+    if (sliderCurve) sliderCurve.value(settings.globalCurve);
+    anyRandomized = true;
+  }
+
+  if (targets.gravityMass) {
+    settings.gravityMass = Math.round(random(0, 1800));
+    if (sliderGravity) sliderGravity.value(settings.gravityMass);
+    if (singularity) singularity.mass = settings.gravityMass;
+    anyRandomized = true;
+  }
+
+  if (targets.fishEye) {
+    settings.fishEye = +(random(0.0, 1.5)).toFixed(2);
+    if (sliderFishEye) sliderFishEye.value(settings.fishEye);
+    anyRandomized = true;
+  }
+
+  if (targets.singularityRadius) {
+    settings.singularityRadius = Math.round(random(0, 35));
+    if (sliderRadius) sliderRadius.value(settings.singularityRadius);
+    if (singularity) singularity.radius = settings.singularityRadius;
+    anyRandomized = true;
+  }
+
+  if (targets.escapeFactor) {
+    settings.escapeFactor = +(random(0.0, 0.8)).toFixed(2);
+    if (sliderEscape) sliderEscape.value(settings.escapeFactor);
+    anyRandomized = true;
+  }
+
+  if (targets.overflow) {
+    const randOverflowMode = Math.random() > 0.5 ? 'solid' : 'transparent';
+    settings.overflowMode = randOverflowMode;
+    settings.overflowOpacity = (randOverflowMode === 'solid') ? 1.0 : +(random(0.2, 0.8)).toFixed(2);
+    if (sliderOverflow) sliderOverflow.value(randOverflowMode === 'solid' ? 1 : 0);
+
+    // Normal uncranked opacity interval: strictly within 0% to 100% (0.0 to 1.0)
+    const randStartPct = Math.round(random(0, 40));
+    const randEndPct = Math.round(random(randStartPct + 15, 100));
+    settings.opacityStart = randStartPct / 100.0;
+    settings.opacityEnd = randEndPct / 100.0;
+    anyRandomized = true;
+  }
+
+  if (targets.chroma) {
+    settings.linkFishEyeChroma = Math.random() > 0.4;
+    settings.chromaPos = +(random(0.20, 0.80)).toFixed(2);
+    anyRandomized = true;
+  }
+
+  if (targets.colors) {
+    const baseHue = Math.floor(random(0, 360));
+    const closeSat = Math.floor(random(75, 100));
+    const closeLit = Math.floor(random(45, 65));
+    settings.closeColor = hslToHex(baseHue, closeSat, closeLit);
+
+    const farHue = (baseHue + Math.floor(random(120, 240))) % 360;
+    const farSat = Math.floor(random(40, 90));
+    const farLit = Math.floor(random(6, 18));
+    settings.farColor = hslToHex(farHue, farSat, farLit);
+
+    colorCloseRgb = hexToRgb(settings.closeColor);
+    colorFarRgb = hexToRgb(settings.farColor);
+    window.colorCloseRgb = colorCloseRgb;
+    window.colorFarRgb = colorFarRgb;
+    anyRandomized = true;
+  }
+
+  if (targets.walls) {
+    const randWallCount = Math.round(random(4, 12));
+    settings.wallCount = randWallCount;
+    setWallCount(randWallCount, true); // skip save
+    anyRandomized = true;
+  }
+
+  if (!anyRandomized) {
+    showSaveToast('⚠️ No Randomizer Targets Selected (Check settings)');
+    return;
+  }
+
+  // 2. Sync UI controls (modal, indicators, sync methods)
   syncOverflowUI();
   syncChromaUI();
   syncOpacityIntervalUI();
   applyLiveLayout();
 
-  // Sync modal inputs if open
+  // 3. Sync modal inputs if open
   const closeInput = document.getElementById('close-color-input');
   const farInput = document.getElementById('far-color-input');
   const closeHex = document.getElementById('close-hex-label');
@@ -940,7 +996,7 @@ function randomizeSettings(saveImmediately = false) {
     hasUnsavedChanges = false;
   } else {
     hasUnsavedChanges = true;
-    showSaveToast('🎲 Randomized Settings Applied (Unsaved - Press Ctrl+S to save)');
+    showSaveToast('🎲 Randomized (Normal Uncranked Bounds - Press Ctrl+S to save)');
   }
 }
 
@@ -1335,7 +1391,28 @@ function initModalListeners() {
     if (magBadge) magBadge.textContent = `${sliderMagnitude}x`;
 
     syncAutoSaveUI();
+    syncRandomizerTargetsUI();
     updateSliderSteps();
+  }
+
+  function syncRandomizerTargetsUI() {
+    const targets = Object.assign({}, defaultRandomTargets, settings.randomTargets || {});
+    let activeCount = 0;
+    const totalCount = Object.keys(defaultRandomTargets).length;
+
+    document.querySelectorAll('.rand-target-cb').forEach(cb => {
+      const key = cb.dataset.key;
+      const isActive = (targets[key] !== false);
+      cb.checked = isActive;
+      if (isActive) activeCount++;
+    });
+
+    const badge = document.getElementById('modal-rand-count-badge');
+    if (badge) {
+      badge.textContent = `${activeCount} / ${totalCount} Active`;
+      badge.style.color = (activeCount > 0) ? '#ffaa00' : '#a0aec0';
+      badge.style.background = (activeCount > 0) ? 'rgba(255, 170, 0, 0.15)' : 'rgba(160, 174, 192, 0.15)';
+    }
   }
 
   if (btnOpen) {
@@ -1568,6 +1645,40 @@ function initModalListeners() {
     });
   }
 
+  document.querySelectorAll('.rand-target-cb').forEach(cb => {
+    cb.addEventListener('change', (e) => {
+      const key = e.target.dataset.key;
+      if (!settings.randomTargets) settings.randomTargets = Object.assign({}, defaultRandomTargets);
+      settings.randomTargets[key] = e.target.checked;
+      syncRandomizerTargetsUI();
+      saveSettings();
+    });
+  });
+
+  const btnRandAll = document.getElementById('btn-rand-all');
+  if (btnRandAll) {
+    btnRandAll.addEventListener('click', () => {
+      if (!settings.randomTargets) settings.randomTargets = {};
+      Object.keys(defaultRandomTargets).forEach(k => {
+        settings.randomTargets[k] = true;
+      });
+      syncRandomizerTargetsUI();
+      saveSettings();
+    });
+  }
+
+  const btnRandNone = document.getElementById('btn-rand-none');
+  if (btnRandNone) {
+    btnRandNone.addEventListener('click', () => {
+      if (!settings.randomTargets) settings.randomTargets = {};
+      Object.keys(defaultRandomTargets).forEach(k => {
+        settings.randomTargets[k] = false;
+      });
+      syncRandomizerTargetsUI();
+      saveSettings();
+    });
+  }
+
   document.querySelectorAll('.btn-overflow-mode').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const mode = e.currentTarget.getAttribute('data-mode');
@@ -1600,6 +1711,11 @@ function initModalListeners() {
       if (modalAutoSaveCheckbox) {
         settings.autoSave30s = modalAutoSaveCheckbox.checked;
       }
+      document.querySelectorAll('.rand-target-cb').forEach(cb => {
+        const key = cb.dataset.key;
+        if (!settings.randomTargets) settings.randomTargets = {};
+        settings.randomTargets[key] = cb.checked;
+      });
       const linkChromaCb = document.getElementById('modal-link-chroma-checkbox');
       const chromaSlider = document.getElementById('modal-chroma-pos-slider');
       if (linkChromaCb) settings.linkFishEyeChroma = linkChromaCb.checked;
@@ -1635,6 +1751,11 @@ function initModalListeners() {
       if (modalAutoSaveCheckbox) {
         setAutoSave30s(modalAutoSaveCheckbox.checked, false);
       }
+      document.querySelectorAll('.rand-target-cb').forEach(cb => {
+        const key = cb.dataset.key;
+        if (!settings.randomTargets) settings.randomTargets = {};
+        settings.randomTargets[key] = cb.checked;
+      });
       const linkChromaCb = document.getElementById('modal-link-chroma-checkbox');
       const chromaSlider = document.getElementById('modal-chroma-pos-slider');
       if (linkChromaCb) settings.linkFishEyeChroma = linkChromaCb.checked;
@@ -1665,6 +1786,7 @@ function initModalListeners() {
   if (btnResetDefaults) {
     btnResetDefaults.addEventListener('click', () => {
       settings = Object.assign({}, defaultSettings);
+      settings.randomTargets = Object.assign({}, defaultRandomTargets);
       sliderMagnitude = 1;
       hasUnsavedChanges = false;
       if (autoSaveIntervalId) {
