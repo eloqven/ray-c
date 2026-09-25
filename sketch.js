@@ -19,6 +19,7 @@ const defaultSettings = {
   fishEye: 0.0,
   overflowMode: 'transparent',
   overflowOpacity: 0.35,
+  showHUD: true,
   magnitude: 1
 };
 
@@ -66,7 +67,7 @@ var tapHistory = {
   ArrowRight: []
 };
 
-const orderMagnitudes = [0.01, 0.1, 1, 10, 0.001];
+const orderMagnitudes = [0.001, 0.01, 0.1, 1, 10, 100];
 var sliderMagnitude = 1;
 
 var averageFPS = 60;
@@ -119,6 +120,7 @@ function loadSettings() {
     }
   }
   if (settings.overflowOpacity === undefined) settings.overflowOpacity = (settings.overflowMode === 'solid' ? 1.0 : 0.35);
+  if (settings.showHUD === undefined) settings.showHUD = true;
   if (settings.magnitude === undefined || !orderMagnitudes.includes(settings.magnitude)) {
     sliderMagnitude = 1;
   } else {
@@ -230,6 +232,7 @@ function saveSettings() {
       fishEye: settings.fishEye,
       overflowMode: settings.overflowMode,
       overflowOpacity: settings.overflowOpacity,
+      showHUD: (settings.showHUD !== false),
       magnitude: sliderMagnitude
     });
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(dataToSave));
@@ -363,6 +366,7 @@ function setup() {
   window.addEventListener('resize', windowResized);
   window.addEventListener('keydown', onGlobalKeyDown, { capture: true });
   initModalListeners();
+  setHUDVisible(settings.showHUD !== false);
 }
 
 function setSliderMagnitude(mag) {
@@ -528,6 +532,11 @@ function syncOverflowUI() {
     modalOverflowSlider.value = isSolid ? 1 : 0;
   }
 
+  const modalOverflowCheckbox = document.getElementById('modal-overflow-checkbox');
+  if (modalOverflowCheckbox) {
+    modalOverflowCheckbox.checked = isSolid;
+  }
+
   document.querySelectorAll('.btn-overflow-mode').forEach(btn => {
     const mode = btn.getAttribute('data-mode');
     if (mode === settings.overflowMode) {
@@ -536,6 +545,36 @@ function syncOverflowUI() {
       btn.classList.remove('active');
     }
   });
+}
+
+function setHUDVisible(visible) {
+  settings.showHUD = !!visible;
+  const displayVal = settings.showHUD ? '' : 'none';
+
+  if (allEngineSliders && allEngineSliders.length) {
+    for (let item of allEngineSliders) {
+      if (item && item.slider && item.slider.elt) {
+        item.slider.elt.style.display = displayVal;
+      }
+    }
+  }
+
+  const navBar = document.querySelector('.nav-bar');
+  const settingsBtn = document.getElementById('btn-open-settings');
+  if (navBar) navBar.style.display = displayVal;
+  if (settingsBtn) settingsBtn.style.display = displayVal;
+
+  const hudCheckbox = document.getElementById('modal-hud-checkbox');
+  if (hudCheckbox) hudCheckbox.checked = settings.showHUD;
+  const hudLabel = document.getElementById('modal-hud-label');
+  if (hudLabel) hudLabel.textContent = settings.showHUD ? 'Visible (Press H)' : 'Hidden (Press H)';
+
+  saveSettings();
+}
+
+function toggleHUD() {
+  setHUDVisible(!settings.showHUD);
+  showSaveToast(settings.showHUD ? '👁️ HUD & Controls Displayed' : '🙈 HUD & Controls Hidden (Press H to restore)');
 }
 
 function onOverflowChanged() {
@@ -652,36 +691,52 @@ function onGlobalKeyDown(e) {
     return;
   }
 
-  // Shift + 1..5 for direct magnitude selection (0.01x, 0.1x, 1x, 10x, 0.001x)
+  // H key toggles all HUD visibility on/off
+  if (!e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && (e.key === 'h' || e.key === 'H' || e.code === 'KeyH')) {
+    const modal = document.getElementById('settings-modal');
+    if (!modal || modal.classList.contains('hidden')) {
+      e.preventDefault();
+      toggleHUD();
+      return;
+    }
+  }
+
+  // Shift + 1..6 for direct magnitude selection (0.001x, 0.01x, 0.1x, 1x, 10x, 100x)
   if (e.shiftKey && !e.ctrlKey && !e.altKey) {
     if (e.code === 'Digit1' || e.key === '!' || e.key === '1') {
       e.preventDefault();
       stopAutoSlide();
-      setSliderMagnitude(0.01);
+      setSliderMagnitude(0.001);
       return;
     }
     if (e.code === 'Digit2' || e.key === '@' || e.key === '2') {
       e.preventDefault();
       stopAutoSlide();
-      setSliderMagnitude(0.1);
+      setSliderMagnitude(0.01);
       return;
     }
     if (e.code === 'Digit3' || e.key === '#' || e.key === '3') {
       e.preventDefault();
       stopAutoSlide();
-      setSliderMagnitude(1);
+      setSliderMagnitude(0.1);
       return;
     }
     if (e.code === 'Digit4' || e.key === '$' || e.key === '4') {
       e.preventDefault();
       stopAutoSlide();
-      setSliderMagnitude(10);
+      setSliderMagnitude(1);
       return;
     }
     if (e.code === 'Digit5' || e.key === '%' || e.key === '5') {
       e.preventDefault();
       stopAutoSlide();
-      setSliderMagnitude(0.001);
+      setSliderMagnitude(10);
+      return;
+    }
+    if (e.code === 'Digit6' || e.key === '^' || e.key === '6') {
+      e.preventDefault();
+      stopAutoSlide();
+      setSliderMagnitude(100);
       return;
     }
   }
@@ -837,6 +892,11 @@ function initModalListeners() {
 
     syncOverflowUI();
 
+    const modalHudCheckbox = document.getElementById('modal-hud-checkbox');
+    if (modalHudCheckbox) modalHudCheckbox.checked = (settings.showHUD !== false);
+    const modalHudLabel = document.getElementById('modal-hud-label');
+    if (modalHudLabel) modalHudLabel.textContent = (settings.showHUD !== false) ? 'Visible (Press H)' : 'Hidden (Press H)';
+
     const magBadge = document.getElementById('modal-step-badge');
     if (magBadge) magBadge.textContent = `${sliderMagnitude}x`;
 
@@ -969,6 +1029,20 @@ function initModalListeners() {
     });
   }
 
+  const modalOverflowCheckbox = document.getElementById('modal-overflow-checkbox');
+  if (modalOverflowCheckbox) {
+    modalOverflowCheckbox.addEventListener('change', (e) => {
+      setOverflowMode(e.target.checked ? 'solid' : 'transparent');
+    });
+  }
+
+  const modalHudCheckbox = document.getElementById('modal-hud-checkbox');
+  if (modalHudCheckbox) {
+    modalHudCheckbox.addEventListener('change', (e) => {
+      setHUDVisible(e.target.checked);
+    });
+  }
+
   document.querySelectorAll('.btn-overflow-mode').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const mode = e.currentTarget.getAttribute('data-mode');
@@ -987,10 +1061,16 @@ function initModalListeners() {
       if (modalFishEyeSlider) settings.fishEye = parseFloat(modalFishEyeSlider.value);
       if (modalRadiusSlider) settings.singularityRadius = parseFloat(modalRadiusSlider.value);
       if (modalEscapeSlider) settings.escapeFactor = parseFloat(modalEscapeSlider.value);
-      if (modalOverflowSlider) {
+      if (modalOverflowCheckbox) {
+        settings.overflowMode = modalOverflowCheckbox.checked ? 'solid' : 'transparent';
+        settings.overflowOpacity = modalOverflowCheckbox.checked ? 1.0 : 0.35;
+      } else if (modalOverflowSlider) {
         const val = parseFloat(modalOverflowSlider.value);
         settings.overflowMode = val >= 0.5 ? 'solid' : 'transparent';
         settings.overflowOpacity = val >= 0.5 ? 1.0 : 0.35;
+      }
+      if (modalHudCheckbox) {
+        settings.showHUD = modalHudCheckbox.checked;
       }
       saveSettings();
       window.location.reload();
@@ -1008,9 +1088,14 @@ function initModalListeners() {
       if (modalFishEyeSlider) settings.fishEye = parseFloat(modalFishEyeSlider.value);
       if (modalRadiusSlider) settings.singularityRadius = parseFloat(modalRadiusSlider.value);
       if (modalEscapeSlider) settings.escapeFactor = parseFloat(modalEscapeSlider.value);
-      if (modalOverflowSlider) {
+      if (modalOverflowCheckbox) {
+        setOverflowMode(modalOverflowCheckbox.checked ? 'solid' : 'transparent');
+      } else if (modalOverflowSlider) {
         const val = parseFloat(modalOverflowSlider.value);
         setOverflowMode(val >= 0.5 ? 'solid' : 'transparent');
+      }
+      if (modalHudCheckbox) {
+        setHUDVisible(modalHudCheckbox.checked);
       }
       if (singularity) {
         singularity.mass = settings.gravityMass;
@@ -1448,6 +1533,8 @@ function draw() {
 }
 
 function renderHUD() {
+  if (settings.showHUD === false) return;
+
   const currFPS = frameRate();
   averageFPS = (averageFPS * 0.95) + (currFPS * 0.05);
 
@@ -1499,14 +1586,14 @@ function renderHUD() {
     text(`⚡ AUTO ${autoSlideState.direction > 0 ? '▶▶' : '◀◀'} [${autoSlideState.sliderObj.name}]  (Key/Click to stop)`, 180, 238);
   } else {
     fill(55, 255, 225);
-    text(`Step: ${sliderMagnitude}x  [Shift+1..5 | 1..0,- | Num +/-]`, 180, 238);
+    text(`Step: ${sliderMagnitude}x  [Shift+1..6 | 1..0,- | Num +/-]`, 180, 238);
   }
 
   // Right diagnostics panel (anchored before the ⚙ Settings button)
   const rightX = width - 130;
   fill(10, 15, 25, 225);
   rectMode(CORNER);
-  rect(rightX - 240, 5, 240, 130, 6);
+  rect(rightX - 240, 5, 240, 146, 6);
 
   textAlign(RIGHT);
   fill(255);
@@ -1524,5 +1611,6 @@ function renderHUD() {
   text(`⚡ Move: WASD Keys (Cross Walls)`, rightX - 10, 90);
   text(`🌌 Drag Singularity / Alt+Click`, rightX - 10, 107);
   text(`💾 Save State: Ctrl+S`, rightX - 10, 124);
+  text(`👁️ Toggle HUD: H`, rightX - 10, 141);
   pop();
 }
