@@ -459,11 +459,9 @@ function initEngineSliders() {
       }
       item.slider.elt.addEventListener('focus', () => { selectedSliderIndex = idx; });
       item.slider.elt.addEventListener('mousedown', () => {
-        stopAutoSlide();
         selectedSliderIndex = idx;
       });
       item.slider.elt.addEventListener('input', () => {
-        stopAutoSlide();
         selectedSliderIndex = idx;
       });
     }
@@ -472,7 +470,6 @@ function initEngineSliders() {
 
 function selectSliderByIndex(idx) {
   if (idx < 0 || idx >= allEngineSliders.length) return;
-  stopAutoSlide();
   selectedSliderIndex = idx;
   const target = allEngineSliders[idx];
   if (target && target.slider && target.slider.elt) {
@@ -714,12 +711,12 @@ function stepSlider(sliderObj, direction) {
   if (nextVal >= maxVal) {
     nextVal = maxVal;
     if (autoSlideState.active && autoSlideState.sliderObj === sliderObj) {
-      stopAutoSlide();
+      autoSlideState.direction = -1;
     }
   } else if (nextVal <= minVal) {
     nextVal = minVal;
     if (autoSlideState.active && autoSlideState.sliderObj === sliderObj) {
-      stopAutoSlide();
+      autoSlideState.direction = 1;
     }
   }
 
@@ -744,7 +741,7 @@ function startAutoSlide(sliderObj, direction) {
 
   autoSlideState.intervalId = setInterval(() => {
     if (!autoSlideState.active) return;
-    stepSlider(sliderObj, direction);
+    stepSlider(sliderObj, autoSlideState.direction);
   }, 50);
 }
 
@@ -770,22 +767,23 @@ function onGlobalKeyDown(e) {
 
   if (e.target && (e.target.tagName === 'INPUT' && (e.target.type === 'text' || e.target.type === 'color'))) return;
 
-  // If auto-slide is active, any key other than WASD cancels auto-slide immediately
-  const isWasd = (e.key === 'w' || e.key === 'W' || e.key === 'a' || e.key === 'A' || e.key === 's' || e.key === 'S' || e.key === 'd' || e.key === 'D');
-  if (autoSlideState.active && !isWasd) {
+  // Un-trigger auto-slide ONLY if Ctrl + Shift keys are pressed at the same time
+  const isCtrlShift = (e.ctrlKey || e.key === 'Control') && (e.shiftKey || e.key === 'Shift');
+  if (isCtrlShift && autoSlideState.active) {
+    e.preventDefault();
     stopAutoSlide();
+    showSaveToast('Auto-slide stopped (Ctrl + Shift)');
+    return;
   }
 
   // Numpad +/- to increase/decrease wall count (min 4)
   if (e.code === 'NumpadAdd' || (e.key === '+' && !e.shiftKey)) {
     e.preventDefault();
-    stopAutoSlide();
     changeWallCount(1);
     return;
   }
   if (e.code === 'NumpadSubtract') {
     e.preventDefault();
-    stopAutoSlide();
     changeWallCount(-1);
     return;
   }
@@ -804,37 +802,31 @@ function onGlobalKeyDown(e) {
   if (e.shiftKey && !e.ctrlKey && !e.altKey) {
     if (e.code === 'Digit1' || e.key === '!' || e.key === '1') {
       e.preventDefault();
-      stopAutoSlide();
       setSliderMagnitude(10);
       return;
     }
     if (e.code === 'Digit2' || e.key === '@' || e.key === '2') {
       e.preventDefault();
-      stopAutoSlide();
       setSliderMagnitude(1);
       return;
     }
     if (e.code === 'Digit3' || e.key === '#' || e.key === '3') {
       e.preventDefault();
-      stopAutoSlide();
       setSliderMagnitude(0.1);
       return;
     }
     if (e.code === 'Digit4' || e.key === '$' || e.key === '4') {
       e.preventDefault();
-      stopAutoSlide();
       setSliderMagnitude(0.01);
       return;
     }
     if (e.code === 'Digit5' || e.key === '%' || e.key === '5') {
       e.preventDefault();
-      stopAutoSlide();
       setSliderMagnitude(0.001);
       return;
     }
     if (e.code === 'Digit6' || e.key === '^' || e.key === '6') {
       e.preventDefault();
-      stopAutoSlide();
       setSliderMagnitude(0.0001);
       return;
     }
@@ -890,7 +882,6 @@ function onGlobalKeyDown(e) {
   // Tab key cycles active slider and focuses it
   if (e.key === 'Tab') {
     e.preventDefault();
-    stopAutoSlide();
     if (e.shiftKey) {
       selectedSliderIndex = (selectedSliderIndex - 1 + allEngineSliders.length) % allEngineSliders.length;
     } else {
@@ -906,7 +897,6 @@ function onGlobalKeyDown(e) {
   // Up/Down arrows: switch active slider
   if (e.key === 'ArrowUp') {
     e.preventDefault();
-    stopAutoSlide();
     selectedSliderIndex = (selectedSliderIndex - 1 + allEngineSliders.length) % allEngineSliders.length;
     const target = allEngineSliders[selectedSliderIndex];
     if (target && target.slider && target.slider.elt) {
@@ -916,7 +906,6 @@ function onGlobalKeyDown(e) {
   }
   if (e.key === 'ArrowDown') {
     e.preventDefault();
-    stopAutoSlide();
     selectedSliderIndex = (selectedSliderIndex + 1) % allEngineSliders.length;
     const target = allEngineSliders[selectedSliderIndex];
     if (target && target.slider && target.slider.elt) {
@@ -925,7 +914,7 @@ function onGlobalKeyDown(e) {
     return;
   }
 
-  // Left/Right arrows: manual step + triple-tap detection for auto-sliding
+  // Left/Right arrows: manual step + triple-tap detection for auto-sliding (requires Shift)
   if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
     e.preventDefault();
     const target = getActiveSliderObj();
@@ -935,23 +924,30 @@ function onGlobalKeyDown(e) {
     // Ignore OS key repeats while holding down
     if (e.repeat) return;
 
-    const keyName = e.key;
-    const now = Date.now();
-    let history = tapHistory[keyName] || [];
-    // Keep taps from the last 800ms
-    history = history.filter(t => now - t <= 800);
-    history.push(now);
-    tapHistory[keyName] = history;
+    // 3 arrow press rule applies ONLY if Shift is pressed at the same time
+    if (e.shiftKey) {
+      const keyName = e.key;
+      const now = Date.now();
+      let history = tapHistory[keyName] || [];
+      // Keep taps from the last 800ms
+      history = history.filter(t => now - t <= 800);
+      history.push(now);
+      tapHistory[keyName] = history;
 
-    // Check if 3 quick presses in a row (consecutive intervals <= 400ms)
-    if (history.length >= 3) {
-      const t1 = history[history.length - 3];
-      const t2 = history[history.length - 2];
-      const t3 = history[history.length - 1];
-      if ((t2 - t1 <= 400) && (t3 - t2 <= 400)) {
-        tapHistory[keyName] = [];
-        startAutoSlide(target, direction);
+      // Check if 3 quick presses in a row (consecutive intervals <= 400ms)
+      if (history.length >= 3) {
+        const t1 = history[history.length - 3];
+        const t2 = history[history.length - 2];
+        const t3 = history[history.length - 1];
+        if ((t2 - t1 <= 400) && (t3 - t2 <= 400)) {
+          tapHistory[keyName] = [];
+          startAutoSlide(target, direction);
+          showSaveToast(`Auto-slide: ${target.name} ${direction > 0 ? '▶' : '◀'} (Ctrl+Shift to stop)`);
+        }
       }
+    } else {
+      // Clear tap history when Shift is not held, avoiding accidental auto-slide triggers
+      tapHistory[e.key] = [];
     }
     return;
   }
@@ -1531,10 +1527,6 @@ function handleInput() {
 }
 
 function mousePressed() {
-  if (autoSlideState && autoSlideState.active) {
-    stopAutoSlide();
-  }
-
   // Restore keyboard focus to canvas whenever clicking anywhere on canvas
   if (document.activeElement && document.activeElement.blur && document.activeElement !== document.body) {
     document.activeElement.blur();
@@ -1851,10 +1843,10 @@ function renderHUD() {
   if (autoSlideState.active && autoSlideState.sliderObj) {
     const pulse = (Math.floor(millis() / 200) % 2 === 0);
     fill(pulse ? color(255, 115, 26) : color(55, 255, 225));
-    text(`⚡ AUTO ${autoSlideState.direction > 0 ? '▶▶' : '◀◀'} [${autoSlideState.sliderObj.name}]  (Key/Click to stop)`, 180, 238);
+    text(`⚡ AUTO ${autoSlideState.direction > 0 ? '▶▶' : '◀◀'} [${autoSlideState.sliderObj.name}]  (Ctrl+Shift to stop)`, 180, 238);
   } else {
     fill(55, 255, 225);
-    text(`Step: ${sliderMagnitude}x  [Shift+1..6 | 1..0,- | Num +/-]`, 180, 238);
+    text(`Step: ${sliderMagnitude}x  [Shift+3x◀/▶: Auto | Ctrl+Shift: Stop | 1..0,-]`, 180, 238);
   }
 
   // Right diagnostics panel (anchored before the ⚙ Settings button)
