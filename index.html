@@ -440,14 +440,19 @@
           <input type="range" id="modal-escape-slider" min="0" max="1" step="0.05" value="0.2" style="width: 100%; margin-top: 8px;">
         </div>
 
-        <!-- Setting 8: Top Wall Overflow Opacity Gradient -->
+        <!-- Setting 8: Top Wall Overflow Fade Out Gradient -->
         <div class="setting-item">
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <label for="modal-overflow-slider">Top Wall Overflow Opacity Gradient</label>
-            <span id="modal-overflow-label" style="font-size: 13px; color: #37ffe1; font-weight: 600;">35% (Smooth Fade)</span>
+            <label for="modal-overflow-slider">Top Wall Overflow Fade Out Gradient</label>
+            <span id="modal-overflow-label" style="font-size: 13px; color: #37ffe1; font-weight: 600;">35% (Fade Out Gradient)</span>
           </div>
-          <p class="setting-desc">Controls opacity gradient of tall 3D walls overflowing into the player's 2D arena (0% = invisible, 100% = fully opaque):</p>
+          <p class="setting-desc">Adjusts fade-out gradient steepness of tall walls overflowing into 2D view (100% solid at split line, fading to 0% above). Toggleable at extremes:</p>
           <input type="range" id="modal-overflow-slider" min="0" max="1" step="0.05" value="0.35" style="width: 100%; margin-top: 8px;">
+          <div style="display: flex; gap: 8px; margin-top: 6px;">
+            <button type="button" class="btn btn-secondary btn-overflow-toggle" data-val="0" style="flex: 1; padding: 4px; font-size: 11px;">0% (Cutoff)</button>
+            <button type="button" class="btn btn-secondary btn-overflow-toggle" data-val="0.35" style="flex: 1; padding: 4px; font-size: 11px;">35% (Fade Out)</button>
+            <button type="button" class="btn btn-secondary btn-overflow-toggle" data-val="1" style="flex: 1; padding: 4px; font-size: 11px;">100% (Solid)</button>
+          </div>
         </div>
 
         <!-- Step Magnitude Controller -->

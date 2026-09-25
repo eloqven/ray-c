@@ -374,6 +374,13 @@ function changeWallCount(delta) {
   setWallCount(current + delta);
 }
 
+function formatOverflowLabel(val) {
+  const pct = Math.round(val * 100);
+  if (pct <= 1) return '0% (Hard Cutoff)';
+  if (pct >= 99) return '100% (Solid Overflow)';
+  return `${pct}% (Fade Out Gradient)`;
+}
+
 function onOverflowChanged() {
   if (!sliderOverflow) return;
   const val = sliderOverflow.value();
@@ -383,8 +390,7 @@ function onOverflowChanged() {
   const modalOverflowLabel = document.getElementById('modal-overflow-label');
   if (modalOverflowSlider) modalOverflowSlider.value = val;
   if (modalOverflowLabel) {
-    const pct = Math.round(val * 100);
-    modalOverflowLabel.textContent = `${pct}%${pct === 0 ? ' (Hidden in 2D View)' : ' (Gradient Fade)'}`;
+    modalOverflowLabel.textContent = formatOverflowLabel(val);
   }
 }
 
@@ -664,8 +670,7 @@ function initModalListeners() {
 
     if (modalOverflowSlider) modalOverflowSlider.value = settings.overflowOpacity;
     if (modalOverflowLabel) {
-      const pct = Math.round(settings.overflowOpacity * 100);
-      modalOverflowLabel.textContent = `${pct}%${pct === 0 ? ' (Hidden in 2D View)' : ' (Gradient Fade)'}`;
+      modalOverflowLabel.textContent = formatOverflowLabel(settings.overflowOpacity);
     }
 
     const magBadge = document.getElementById('modal-step-badge');
@@ -797,11 +802,22 @@ function initModalListeners() {
     modalOverflowSlider.addEventListener('input', (e) => {
       const val = parseFloat(e.target.value);
       settings.overflowOpacity = val;
-      const pct = Math.round(val * 100);
-      if (modalOverflowLabel) modalOverflowLabel.textContent = `${pct}%${pct === 0 ? ' (Hidden in 2D View)' : ' (Gradient Fade)'}`;
+      if (modalOverflowLabel) modalOverflowLabel.textContent = formatOverflowLabel(val);
+      if (sliderOverflow) sliderOverflow.value(val);
       saveSettings();
     });
   }
+
+  document.querySelectorAll('.btn-overflow-toggle').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const val = parseFloat(e.currentTarget.getAttribute('data-val'));
+      settings.overflowOpacity = val;
+      if (modalOverflowSlider) modalOverflowSlider.value = val;
+      if (sliderOverflow) sliderOverflow.value(val);
+      if (modalOverflowLabel) modalOverflowLabel.textContent = formatOverflowLabel(val);
+      saveSettings();
+    });
+  });
 
   if (btnSaveRefresh) {
     btnSaveRefresh.addEventListener('click', () => {
@@ -1165,7 +1181,7 @@ function draw() {
     const colWidth = Math.max(1, xEnd - xStart);
     const topY = halfH - h / 2;
     const bottomY = topY + h;
-    const overflowOpacity = (settings.overflowOpacity !== undefined) ? settings.overflowOpacity : 0.35;
+    const overflowVal = (settings.overflowOpacity !== undefined) ? settings.overflowOpacity : 0.35;
 
     if (hitType === 'singularity') {
       // Event Horizon rendered in 3D: Pitch black void silhouette
@@ -1179,7 +1195,7 @@ function draw() {
         rect(xStart, topY + h - 2, colWidth, 2);
       } else {
         // Wall slice overflows into 2D view (topY < 0)
-        // 1) Bottom portion in 3D view (y >= 0 to bottomY)
+        // 1) Bottom portion in 3D view (y >= 0 to bottomY): Strictly solid, NO vertical opacity gradient
         if (bottomY > 0) {
           fill(0, 0, 0);
           rect(xStart, 0, colWidth, bottomY);
@@ -1187,18 +1203,25 @@ function draw() {
           fill(55, 255, 225, 180);
           rect(xStart, bottomY - 2, colWidth, 2);
         }
-        // 2) Top overflowing portion in 2D view (topY to 0) with opacity gradient
-        if (overflowOpacity > 0) {
-          const gradTop = Math.max(topY, -sceneH);
-          const grad = drawingContext.createLinearGradient(0, gradTop, 0, 0);
-          grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-          grad.addColorStop(1, `rgba(0, 0, 0, ${overflowOpacity})`);
-          drawingContext.fillStyle = grad;
-          drawingContext.fillRect(xStart, topY, colWidth, -topY);
+        // 2) Top overflowing portion in 2D view (y < 0): Fade out gradient with solid base at y=0, toggleable at extremes
+        if (overflowVal >= 0.99) {
+          // Max extreme: 100% Solid overflow into 2D view
+          fill(0, 0, 0);
+          rect(xStart, topY, colWidth, -topY);
 
-          fill(55, 255, 225, 180 * overflowOpacity);
+          fill(55, 255, 225, 180);
           rect(xStart, topY, colWidth, 2);
+        } else if (overflowVal > 0.01) {
+          // Smooth fade-out gradient: 100% solid black at split line (y=0), fading to 0% transparent upwards
+          const maxOverflow = Math.min(-topY, sceneH);
+          const fadeH = Math.max(1, Math.round(maxOverflow * overflowVal));
+          const grad = drawingContext.createLinearGradient(0, -fadeH, 0, 0);
+          grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+          grad.addColorStop(1, 'rgba(0, 0, 0, 1)');
+          drawingContext.fillStyle = grad;
+          drawingContext.fillRect(xStart, -fadeH, colWidth, fadeH);
         }
+        // Min extreme (overflowVal <= 0.01): Hard cutoff at split line y=0 (nothing drawn above split line)
       }
     } else {
       // Distance falloff factor t (0 for close wall, 1 for far wall)
@@ -1214,25 +1237,32 @@ function draw() {
       const green = Math.round(constrain(greenBase * greenFactor, 0, 255));
 
       if (topY >= 0) {
-        // Completely inside 3D view: solid fill
+        // Completely inside 3D view: strictly solid fill, NO vertical opacity gradient
         fill(red, green, blue);
         rect(xStart, topY, colWidth, h);
       } else {
         // Wall slice overflows into 2D view (topY < 0)
-        // 1) Bottom portion in 3D view (y >= 0 to bottomY)
+        // 1) Bottom portion in 3D view (y >= 0 to bottomY): Strictly solid, NO vertical opacity gradient
         if (bottomY > 0) {
           fill(red, green, blue);
           rect(xStart, 0, colWidth, bottomY);
         }
-        // 2) Top overflowing portion in 2D view (topY to 0) with opacity gradient
-        if (overflowOpacity > 0) {
-          const gradTop = Math.max(topY, -sceneH);
-          const grad = drawingContext.createLinearGradient(0, gradTop, 0, 0);
+        // 2) Top overflowing portion in 2D view (y < 0): Fade out gradient with solid base at y=0, toggleable at extremes
+        if (overflowVal >= 0.99) {
+          // Max extreme: 100% Solid overflow into 2D view (no fade)
+          fill(red, green, blue);
+          rect(xStart, topY, colWidth, -topY);
+        } else if (overflowVal > 0.01) {
+          // Smooth fade-out gradient: 100% solid wall color at split line (y=0), fading to 0% transparent upwards
+          const maxOverflow = Math.min(-topY, sceneH);
+          const fadeH = Math.max(1, Math.round(maxOverflow * overflowVal));
+          const grad = drawingContext.createLinearGradient(0, -fadeH, 0, 0);
           grad.addColorStop(0, `rgba(${red}, ${green}, ${blue}, 0)`);
-          grad.addColorStop(1, `rgba(${red}, ${green}, ${blue}, ${overflowOpacity})`);
+          grad.addColorStop(1, `rgba(${red}, ${green}, ${blue}, 1)`);
           drawingContext.fillStyle = grad;
-          drawingContext.fillRect(xStart, topY, colWidth, -topY);
+          drawingContext.fillRect(xStart, -fadeH, colWidth, fadeH);
         }
+        // Min extreme (overflowVal <= 0.01): Hard cutoff at split line y=0 (nothing drawn above split line)
       }
     }
 
@@ -1269,7 +1299,7 @@ function renderHUD() {
     `[8] Fish Eye: ${Math.round(sliderFishEye.value() * 100)}%${sliderFishEye.value() === 0 ? ' (Flat)' : ''}`,
     `[9] Singularity: ${sliderRadius.value()}px${sliderRadius.value() === 0 ? ' (0px: Orbit)' : ' (Eats)'}`,
     `[0] Escape Drift: ${sliderEscape.value().toFixed(2)}${sliderEscape.value() === 0 ? ' (Closed)' : ' (Spiral)'}`,
-    `[-] Overflow: ${Math.round(sliderOverflow.value() * 100)}%${sliderOverflow.value() === 0 ? ' (Hidden)' : ' (Fade)'}`
+    `[-] Overflow: ${Math.round(sliderOverflow.value() * 100)}%${sliderOverflow.value() <= 0.01 ? ' (Cutoff)' : (sliderOverflow.value() >= 0.99 ? ' (Solid)' : ' (Fade)')}`
   ];
 
   for (let idx = 0; idx < sliderLabels.length; idx++) {
