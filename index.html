@@ -690,6 +690,18 @@
           <p class="setting-desc">Toggle all on-screen slider panels, stats cards, and navigation overlays on/off (Press <kbd style="background: #222d3d; padding: 2px 6px; border-radius: 4px; border: 1px solid #4a5568; color: #fff;">H</kbd> in game):</p>
         </div>
 
+        <!-- Setting 10: Auto-Save Every 30 Seconds -->
+        <div class="setting-item" style="border-left: 3px solid #37ffe1; padding-left: 12px; margin-top: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" id="modal-autosave-checkbox" style="width: 18px; height: 18px; accent-color: #37ffe1; cursor: pointer;">
+              <label for="modal-autosave-checkbox" style="cursor: pointer; margin: 0; font-weight: 600;">Auto-Save Every 30 Seconds</label>
+            </div>
+            <span id="modal-autosave-badge" style="font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; background: rgba(160, 174, 192, 0.15); color: #a0aec0;">Off</span>
+          </div>
+          <p class="setting-desc">Automatically saves all slider settings and game state every 30 seconds with an on-screen toast confirmation:</p>
+        </div>
+
         <!-- Step Magnitude Controller -->
         <div class="setting-item" style="background: rgba(55, 255, 225, 0.05); padding: 10px; border-radius: 8px; border: 1px solid rgba(55, 255, 225, 0.2);">
           <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -729,6 +741,11 @@
         <!-- Cache Status -->
         <div class="status-badge">
           <span>💾 Press <kbd style="background: #222d3d; padding: 2px 6px; border-radius: 4px; border: 1px solid #4a5568; color: #fff;">Ctrl+S</kbd> anytime to save full state (all settings, player position, angle & walls).</span>
+        </div>
+
+        <!-- Randomize Tip -->
+        <div class="status-badge" style="border-color: rgba(255, 170, 0, 0.35); background: rgba(255, 170, 0, 0.06);">
+          <span>🎲 Press <kbd style="background: #222d3d; padding: 2px 6px; border-radius: 4px; border: 1px solid #4a5568; color: #fff;">Alt+Shift+R</kbd> for random slider settings & colors (unsaved preview until saved).</span>
         </div>
       </div>
 

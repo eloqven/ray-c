@@ -24,10 +24,14 @@ const defaultSettings = {
   linkFishEyeChroma: true,
   opacityStart: 0.20,
   opacityEnd: 0.85,
-  magnitude: 1
+  magnitude: 1,
+  autoSave30s: false
 };
 
 var settings = Object.assign({}, defaultSettings);
+var hasUnsavedChanges = false;
+var autoSaveIntervalId = null;
+window.__BYPASS_BEFOREUNLOAD__ = false;
 var colorCloseRgb = { r: 255, g: 115, b: 26 };
 var colorFarRgb = { r: 30, g: 8, b: 0 };
 window.colorCloseRgb = colorCloseRgb;
@@ -131,6 +135,7 @@ function loadSettings() {
   if (settings.opacityEnd === undefined) settings.opacityEnd = defaultSettings.opacityEnd;
   settings.opacityStart = constrain(settings.opacityStart, -0.30, 1.29);
   settings.opacityEnd = constrain(settings.opacityEnd, settings.opacityStart + 0.01, 1.30);
+  if (settings.autoSave30s === undefined) settings.autoSave30s = false;
   if (settings.magnitude === undefined || !orderMagnitudes.includes(settings.magnitude)) {
     sliderMagnitude = 1;
   } else {
@@ -157,6 +162,7 @@ function showSaveToast(msg = 'Settings & Game State Saved!') {
 }
 
 function saveGameState(showFeedback = true) {
+  hasUnsavedChanges = false;
   try {
     // 1. Sync current active slider and engine settings
     if (sliderSplit) settings.splitPercent = sliderSplit.value();
@@ -175,6 +181,7 @@ function saveGameState(showFeedback = true) {
       settings.overflowMode = v >= 0.5 ? 'solid' : 'transparent';
     }
     settings.magnitude = sliderMagnitude;
+    settings.autoSave30s = !!settings.autoSave30s;
 
     // 2. Capture player state (normalized coordinates resilient to resize + heading)
     if (particle && particle.pos && sceneW > 0 && sceneH > 0) {
@@ -222,7 +229,9 @@ function saveGameState(showFeedback = true) {
   }
 }
 
-function saveSettings() {
+function saveSettings(force = false) {
+  if (hasUnsavedChanges && !force) return;
+  if (force) hasUnsavedChanges = false;
   try {
     const dataToSave = Object.assign({}, settings, {
       splitPercent: settings.splitPercent,
@@ -247,7 +256,8 @@ function saveSettings() {
       linkFishEyeChroma: (settings.linkFishEyeChroma !== false),
       opacityStart: settings.opacityStart,
       opacityEnd: settings.opacityEnd,
-      magnitude: sliderMagnitude
+      magnitude: sliderMagnitude,
+      autoSave30s: !!settings.autoSave30s
     });
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(dataToSave));
   } catch (e) {
@@ -381,6 +391,23 @@ function setup() {
   window.addEventListener('keydown', onGlobalKeyDown, { capture: true });
   initModalListeners();
   setHUDVisible(settings.showHUD !== false);
+
+  if (settings.autoSave30s) {
+    setAutoSave30s(true, false);
+  } else {
+    syncAutoSaveUI();
+  }
+
+  window.addEventListener('beforeunload', (e) => {
+    if (navigator.webdriver || window.__BYPASS_BEFOREUNLOAD__ || (window.location && window.location.search && window.location.search.includes('nobeforeunload'))) {
+      return;
+    }
+    if (hasUnsavedChanges) {
+      e.preventDefault();
+      e.returnValue = 'You have unsaved settings! Press Ctrl+S to save them before leaving.';
+      return e.returnValue;
+    }
+  });
 }
 
 function setSliderMagnitude(mag) {
@@ -554,10 +581,12 @@ function selectSliderByIndex(idx) {
   }
 }
 
-function setWallCount(newWallCount) {
+function setWallCount(newWallCount, skipSave = false) {
   newWallCount = Math.max(4, parseInt(newWallCount, 10) || 4);
   settings.wallCount = newWallCount;
-  saveSettings();
+  if (!skipSave) {
+    saveSettings();
+  }
 
   if (newWallCount > walls.length) {
     for (let i = walls.length; i < newWallCount; i++) {
@@ -722,6 +751,199 @@ function toggleHUD() {
   showSaveToast(settings.showHUD ? '👁️ HUD & Controls Displayed' : '🙈 HUD & Controls Hidden (Press H to restore)');
 }
 
+function syncAutoSaveUI() {
+  const cb = document.getElementById('modal-autosave-checkbox');
+  const badge = document.getElementById('modal-autosave-badge');
+  const isActive = !!settings.autoSave30s;
+
+  if (cb) cb.checked = isActive;
+  if (badge) {
+    if (isActive) {
+      badge.textContent = 'Active (Every 30s)';
+      badge.style.background = 'rgba(55, 255, 225, 0.2)';
+      badge.style.color = '#37ffe1';
+    } else {
+      badge.textContent = 'Off';
+      badge.style.background = 'rgba(160, 174, 192, 0.15)';
+      badge.style.color = '#a0aec0';
+    }
+  }
+}
+
+function setAutoSave30s(enabled, showToast = true) {
+  settings.autoSave30s = !!enabled;
+  if (autoSaveIntervalId) {
+    clearInterval(autoSaveIntervalId);
+    autoSaveIntervalId = null;
+  }
+
+  if (settings.autoSave30s) {
+    autoSaveIntervalId = setInterval(() => {
+      saveGameState(false);
+      showSaveToast('⏱️ Auto-Save: Game State Saved (30s interval)');
+    }, 30000);
+    if (showToast) showSaveToast('⏱️ Auto-Save Every 30s: ON');
+  } else {
+    if (showToast) showSaveToast('⏱️ Auto-Save: OFF');
+  }
+
+  syncAutoSaveUI();
+  saveSettings(true);
+}
+
+function hslToHex(h, s, l) {
+  l /= 100;
+  const a = (s * Math.min(l, 1 - l)) / 100;
+  const f = n => {
+    const k = (n + h / 30) % 12;
+    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round(255 * color).toString(16).padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+function randomizeSettings(saveImmediately = false) {
+  // 1. Generate randomized settings within sensible, aesthetic bounds
+  const randFov = Math.round(random(25, 95));
+  const randDensity = +(random(0.6, 2.5)).toFixed(2);
+  const randThreshold = Math.round(random(200, 1500));
+  const randMaxChunk = Math.round(random(2, 12));
+  const randSplit = Math.round(random(2, 8)) * 10;
+  const randCurve = +(random(-35, 35)).toFixed(1);
+  const randGravity = Math.round(random(100, 900));
+  const randFishEye = +(random(0.0, 1.2)).toFixed(2);
+  const randRadius = Math.round(random(8, 28));
+  const randEscape = +(random(0.05, 0.65)).toFixed(2);
+  const randOverflowMode = Math.random() > 0.5 ? 'solid' : 'transparent';
+  const randOverflowOpacity = (randOverflowMode === 'solid') ? 1.0 : +(random(0.2, 0.6)).toFixed(2);
+
+  // Interval slider randomized (start < end)
+  const randStartPct = Math.round(random(-20, 40));
+  const randEndPct = Math.round(random(randStartPct + 25, 120));
+  const randOpacityStart = randStartPct / 100.0;
+  const randOpacityEnd = randEndPct / 100.0;
+
+  const randLinkChroma = Math.random() > 0.3;
+  const randChromaPos = +(random(0.25, 0.75)).toFixed(2);
+
+  // Vibrant close color and contrasting far color
+  const baseHue = Math.floor(random(0, 360));
+  const closeSat = Math.floor(random(75, 100));
+  const closeLit = Math.floor(random(45, 65));
+  const randCloseColor = hslToHex(baseHue, closeSat, closeLit);
+
+  const farHue = (baseHue + Math.floor(random(120, 240))) % 360;
+  const farSat = Math.floor(random(40, 90));
+  const farLit = Math.floor(random(6, 18));
+  const randFarColor = hslToHex(farHue, farSat, farLit);
+
+  const randWallCount = Math.round(random(5, 10));
+
+  // 2. Apply to settings object in memory WITHOUT saving to localStorage
+  settings.fov = randFov;
+  settings.density = randDensity;
+  settings.lodThreshold = randThreshold;
+  settings.maxChunk = randMaxChunk;
+  settings.splitPercent = randSplit;
+  settings.globalCurve = randCurve;
+  settings.gravityMass = randGravity;
+  settings.fishEye = randFishEye;
+  settings.singularityRadius = randRadius;
+  settings.escapeFactor = randEscape;
+  settings.overflowMode = randOverflowMode;
+  settings.overflowOpacity = randOverflowOpacity;
+  settings.opacityStart = randOpacityStart;
+  settings.opacityEnd = randOpacityEnd;
+  settings.linkFishEyeChroma = randLinkChroma;
+  settings.chromaPos = randChromaPos;
+  settings.closeColor = randCloseColor;
+  settings.farColor = randFarColor;
+  settings.wallCount = randWallCount;
+
+  colorCloseRgb = hexToRgb(settings.closeColor);
+  colorFarRgb = hexToRgb(settings.farColor);
+  window.colorCloseRgb = colorCloseRgb;
+  window.colorFarRgb = colorFarRgb;
+
+  // 3. Update sliders directly
+  if (sliderFOV) sliderFOV.value(settings.fov);
+  if (sliderDensity) sliderDensity.value(settings.density);
+  if (sliderThreshold) sliderThreshold.value(settings.lodThreshold);
+  if (sliderMaxChunk) sliderMaxChunk.value(settings.maxChunk);
+  if (sliderSplit) sliderSplit.value(settings.splitPercent);
+  if (sliderCurve) sliderCurve.value(settings.globalCurve);
+  if (sliderGravity) sliderGravity.value(settings.gravityMass);
+  if (sliderFishEye) sliderFishEye.value(settings.fishEye);
+  if (sliderRadius) sliderRadius.value(settings.singularityRadius);
+  if (sliderEscape) sliderEscape.value(settings.escapeFactor);
+  if (sliderOverflow) sliderOverflow.value(settings.overflowMode === 'solid' ? 1 : 0);
+
+  // 4. Update engine live objects
+  if (particle) {
+    particle.updateFOV(settings.fov);
+    particle.updateDensity(1 / settings.density);
+  }
+  if (singularity) {
+    singularity.mass = settings.gravityMass;
+    singularity.radius = settings.singularityRadius;
+  }
+  setWallCount(randWallCount, true); // skip save
+
+  // 5. Update UI controls (modal, indicators, sync methods)
+  syncOverflowUI();
+  syncChromaUI();
+  syncOpacityIntervalUI();
+  applyLiveLayout();
+
+  // Sync modal inputs if open
+  const closeInput = document.getElementById('close-color-input');
+  const farInput = document.getElementById('far-color-input');
+  const closeHex = document.getElementById('close-hex-label');
+  const farHex = document.getElementById('far-hex-label');
+  if (closeInput) closeInput.value = settings.closeColor;
+  if (farInput) farInput.value = settings.farColor;
+  if (closeHex) closeHex.textContent = settings.closeColor.toUpperCase();
+  if (farHex) farHex.textContent = settings.farColor.toUpperCase();
+
+  const modalSplitSlider = document.getElementById('modal-split-slider');
+  const modalSplitLabel = document.getElementById('modal-split-label');
+  if (modalSplitSlider) modalSplitSlider.value = settings.splitPercent;
+  if (modalSplitLabel) modalSplitLabel.textContent = `${settings.splitPercent}% Top / ${100 - settings.splitPercent}% Bottom`;
+
+  const modalCurveSlider = document.getElementById('modal-curve-slider');
+  const modalCurveLabel = document.getElementById('modal-curve-label');
+  if (modalCurveSlider) modalCurveSlider.value = settings.globalCurve;
+  if (modalCurveLabel) modalCurveLabel.textContent = `${settings.globalCurve > 0 ? '+' : ''}${settings.globalCurve}°`;
+
+  const modalGravitySlider = document.getElementById('modal-gravity-slider');
+  const modalGravityLabel = document.getElementById('modal-gravity-label');
+  if (modalGravitySlider) modalGravitySlider.value = settings.gravityMass;
+  if (modalGravityLabel) modalGravityLabel.textContent = `${settings.gravityMass} M`;
+
+  const modalFishEyeSlider = document.getElementById('modal-fisheye-slider');
+  const modalFishEyeLabel = document.getElementById('modal-fisheye-label');
+  if (modalFishEyeSlider) modalFishEyeSlider.value = settings.fishEye;
+  if (modalFishEyeLabel) modalFishEyeLabel.textContent = `${Math.round(settings.fishEye * 100)}%`;
+
+  const modalRadiusSlider = document.getElementById('modal-radius-slider');
+  const modalRadiusLabel = document.getElementById('modal-radius-label');
+  if (modalRadiusSlider) modalRadiusSlider.value = settings.singularityRadius;
+  if (modalRadiusLabel) modalRadiusLabel.textContent = `${settings.singularityRadius}px`;
+
+  const modalEscapeSlider = document.getElementById('modal-escape-slider');
+  const modalEscapeLabel = document.getElementById('modal-escape-label');
+  if (modalEscapeSlider) modalEscapeSlider.value = settings.escapeFactor;
+  if (modalEscapeLabel) modalEscapeLabel.textContent = settings.escapeFactor.toFixed(2);
+
+  if (saveImmediately) {
+    saveGameState(true);
+    hasUnsavedChanges = false;
+  } else {
+    hasUnsavedChanges = true;
+    showSaveToast('🎲 Randomized Settings Applied (Unsaved - Press Ctrl+S to save)');
+  }
+}
+
 function getEffectiveChromaPos() {
   if (settings.linkFishEyeChroma !== false) {
     const fe = (typeof sliderFishEye !== 'undefined' && sliderFishEye) ? sliderFishEye.value() : (settings.fishEye || 0);
@@ -844,6 +1066,14 @@ function onGlobalKeyDown(e) {
     e.preventDefault();
     e.stopPropagation();
     saveGameState(true);
+    return;
+  }
+
+  // Alt + Shift + R: randomize all slider settings and colors (unsaved preview)
+  if (e.altKey && e.shiftKey && (e.key === 'r' || e.key === 'R' || e.code === 'KeyR')) {
+    e.preventDefault();
+    e.stopPropagation();
+    randomizeSettings(false);
     return;
   }
 
@@ -1104,6 +1334,7 @@ function initModalListeners() {
     const magBadge = document.getElementById('modal-step-badge');
     if (magBadge) magBadge.textContent = `${sliderMagnitude}x`;
 
+    syncAutoSaveUI();
     updateSliderSteps();
   }
 
@@ -1330,6 +1561,13 @@ function initModalListeners() {
     });
   }
 
+  const modalAutoSaveCheckbox = document.getElementById('modal-autosave-checkbox');
+  if (modalAutoSaveCheckbox) {
+    modalAutoSaveCheckbox.addEventListener('change', (e) => {
+      setAutoSave30s(e.target.checked, true);
+    });
+  }
+
   document.querySelectorAll('.btn-overflow-mode').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const mode = e.currentTarget.getAttribute('data-mode');
@@ -1359,13 +1597,17 @@ function initModalListeners() {
       if (modalHudCheckbox) {
         settings.showHUD = modalHudCheckbox.checked;
       }
+      if (modalAutoSaveCheckbox) {
+        settings.autoSave30s = modalAutoSaveCheckbox.checked;
+      }
       const linkChromaCb = document.getElementById('modal-link-chroma-checkbox');
       const chromaSlider = document.getElementById('modal-chroma-pos-slider');
       if (linkChromaCb) settings.linkFishEyeChroma = linkChromaCb.checked;
       if (chromaSlider) settings.chromaPos = parseFloat(chromaSlider.value);
       if (startOpacitySlider) settings.opacityStart = parseInt(startOpacitySlider.value, 10) / 100.0;
       if (endOpacitySlider) settings.opacityEnd = parseInt(endOpacitySlider.value, 10) / 100.0;
-      saveSettings();
+      hasUnsavedChanges = false;
+      saveSettings(true);
       window.location.reload();
     });
   }
@@ -1390,6 +1632,9 @@ function initModalListeners() {
       if (modalHudCheckbox) {
         setHUDVisible(modalHudCheckbox.checked);
       }
+      if (modalAutoSaveCheckbox) {
+        setAutoSave30s(modalAutoSaveCheckbox.checked, false);
+      }
       const linkChromaCb = document.getElementById('modal-link-chroma-checkbox');
       const chromaSlider = document.getElementById('modal-chroma-pos-slider');
       if (linkChromaCb) settings.linkFishEyeChroma = linkChromaCb.checked;
@@ -1400,7 +1645,8 @@ function initModalListeners() {
         singularity.mass = settings.gravityMass;
         singularity.radius = settings.singularityRadius;
       }
-      saveSettings();
+      hasUnsavedChanges = false;
+      saveSettings(true);
       if (sliderSplit) sliderSplit.value(settings.splitPercent);
       if (sliderCurve) sliderCurve.value(settings.globalCurve);
       if (sliderGravity) sliderGravity.value(settings.gravityMass);
@@ -1420,10 +1666,15 @@ function initModalListeners() {
     btnResetDefaults.addEventListener('click', () => {
       settings = Object.assign({}, defaultSettings);
       sliderMagnitude = 1;
+      hasUnsavedChanges = false;
+      if (autoSaveIntervalId) {
+        clearInterval(autoSaveIntervalId);
+        autoSaveIntervalId = null;
+      }
       try {
         localStorage.removeItem(SETTINGS_KEY);
       } catch (e) {}
-      saveSettings();
+      saveSettings(true);
       window.location.reload();
     });
   }
@@ -1744,70 +1995,13 @@ function draw() {
     const isSolidOverflow = (settings.overflowMode === 'solid');
 
     if (hitType === 'singularity') {
-      // Event Horizon rendered in 3D: Pitch black void silhouette
-      if (topY >= 0) {
-        fill(0, 0, 0);
-        rect(xStart, topY, colWidth, h);
+      // Black hole singularity ray: renders nothing (clean background void in 3D, zero black segment overflow in 2D)
+      slicesDrawn++;
+      i += step;
+      continue;
+    }
 
-        // Accretion halo photon ring along top and bottom edges
-        fill(55, 255, 225, 180);
-        rect(xStart, topY, colWidth, 2);
-        rect(xStart, topY + h - 2, colWidth, 2);
-      } else {
-        // Singularity void slice overflows into 2D view (topY < 0)
-        if (isSolidOverflow) {
-          // Solid 100% Opaque Mode: fully opaque void block overflowing into 2D arena
-          if (bottomY > 0) {
-            fill(0, 0, 0);
-            rect(xStart, 0, colWidth, bottomY);
-
-            fill(55, 255, 225, 180);
-            rect(xStart, bottomY - 2, colWidth, 2);
-          }
-          fill(0, 0, 0);
-          rect(xStart, topY, colWidth, -topY);
-
-          fill(55, 255, 225, 180);
-          rect(xStart, topY, colWidth, 2);
-        } else {
-          // Transparent Mode: Atmospheric fade-out gradient with extended 2-way interval controls
-          // Red segments allow fade to extend down into bottom 3D view (vStart < 0) and above top view (vEnd > 1)
-          const maxOverflow = Math.min(-topY, sceneH);
-          const fadeH = Math.max(1, maxOverflow);
-          const vStart = settings.opacityStart !== undefined ? settings.opacityStart : 0.20;
-          const vEnd = settings.opacityEnd !== undefined ? settings.opacityEnd : 0.85;
-
-          const ySolid = -vStart * fadeH;
-          const yClear = -vEnd * fadeH;
-
-          // 1) Solid Base (below ySolid down to bottomY in 3D view)
-          const solidTop = Math.max(topY, ySolid, -sceneH);
-          const solidBottom = Math.min(bottomY, scene3DH);
-          if (solidBottom > solidTop) {
-            fill(0, 0, 0);
-            rect(xStart, solidTop, colWidth, solidBottom - solidTop);
-          }
-
-          // 2) Fading Gradient (from ySolid to yClear)
-          const fadeTop = Math.max(topY, yClear, -sceneH);
-          const fadeBottom = Math.min(bottomY, ySolid, scene3DH);
-          if (fadeBottom > fadeTop) {
-            const grad = drawingContext.createLinearGradient(0, ySolid, 0, yClear);
-            grad.addColorStop(0, 'rgba(0, 0, 0, 1)');
-            grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            drawingContext.fillStyle = grad;
-            drawingContext.fillRect(xStart, fadeTop, colWidth, fadeBottom - fadeTop);
-          }
-
-          // Accretion halo photon ring along bottom edge
-          if (bottomY > 0) {
-            fill(55, 255, 225, 180);
-            rect(xStart, bottomY - 2, colWidth, 2);
-          }
-        }
-      }
-    } else {
-      // Distance falloff factor t (0 for close wall, 1 for far wall)
+    // Distance falloff factor t (0 for close wall, 1 for far wall)
       // Equilibriated Chroma Depth Gradient with position linked to Fish Eye (2 merging behaviours)
       const chromaPos = getEffectiveChromaPos();
       const refSpan = Math.max(1, 2 * chromaPos * maxDist);
@@ -1868,7 +2062,6 @@ function draw() {
           }
         }
       }
-    }
 
     slicesDrawn++;
     i += step;
@@ -1952,9 +2145,11 @@ function renderHUD() {
 
   // Right diagnostics panel (anchored before the ⚙ Settings button)
   const rightX = width - 130;
+  const extraLines = (settings.autoSave30s ? 1 : 0) + (hasUnsavedChanges ? 1 : 0);
+  const panelH = 146 + extraLines * 17;
   fill(10, 15, 25, 225);
   rectMode(CORNER);
-  rect(rightX - 240, 5, 240, 146, 6);
+  rect(rightX - 240, 5, 240, panelH, 6);
 
   textAlign(RIGHT);
   fill(255);
@@ -1973,5 +2168,20 @@ function renderHUD() {
   text(`🌌 Drag Singularity / Alt+Click`, rightX - 10, 107);
   text(`💾 Save State: Ctrl+S`, rightX - 10, 124);
   text(`👁️ Toggle HUD: H`, rightX - 10, 141);
+
+  let nextY = 158;
+  if (settings.autoSave30s) {
+    const pulse = (Math.floor(millis() / 500) % 2 === 0);
+    fill(pulse ? color(55, 255, 225) : color(255, 170, 0));
+    textSize(11);
+    text(`⏱️ Auto-Save: 30s ACTIVE`, rightX - 10, nextY);
+    nextY += 17;
+  }
+  if (hasUnsavedChanges) {
+    const pulse = (Math.floor(millis() / 400) % 2 === 0);
+    fill(pulse ? color(255, 59, 92) : color(255, 170, 0));
+    textSize(11);
+    text(`⚠️ Unsaved Settings (Ctrl+S)`, rightX - 10, nextY);
+  }
   pop();
 }
