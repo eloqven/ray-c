@@ -129,8 +129,8 @@ function loadSettings() {
   if (settings.linkFishEyeChroma === undefined) settings.linkFishEyeChroma = defaultSettings.linkFishEyeChroma;
   if (settings.opacityStart === undefined) settings.opacityStart = defaultSettings.opacityStart;
   if (settings.opacityEnd === undefined) settings.opacityEnd = defaultSettings.opacityEnd;
-  settings.opacityStart = constrain(settings.opacityStart, 0.0, 0.98);
-  settings.opacityEnd = constrain(settings.opacityEnd, settings.opacityStart + 0.01, 1.0);
+  settings.opacityStart = constrain(settings.opacityStart, -0.30, 1.29);
+  settings.opacityEnd = constrain(settings.opacityEnd, settings.opacityStart + 0.01, 1.30);
   if (settings.magnitude === undefined || !orderMagnitudes.includes(settings.magnitude)) {
     sliderMagnitude = 1;
   } else {
@@ -570,6 +570,7 @@ function syncOpacityIntervalUI() {
   const highlight = document.getElementById('modal-opacity-highlight-bar');
   const intervalLabel = document.getElementById('modal-opacity-interval-label');
   const statsLabel = document.getElementById('modal-opacity-stats-label');
+  const zoneBadge = document.getElementById('modal-opacity-zone-badge');
   const container = document.getElementById('modal-opacity-gradient-container');
 
   const sVal = Math.round((settings.opacityStart !== undefined ? settings.opacityStart : 0.20) * 100);
@@ -577,9 +578,14 @@ function syncOpacityIntervalUI() {
 
   if (startSlider) startSlider.value = sVal;
   if (endSlider) endSlider.value = eVal;
+
+  // Total span is 160 units (from -30 to 130)
+  const trackLeftPct = Math.max(0, Math.min(100, ((sVal - (-30)) / 160) * 100));
+  const trackWidthPct = Math.max(0.5, Math.min(100 - trackLeftPct, ((eVal - sVal) / 160) * 100));
+
   if (highlight) {
-    highlight.style.left = `${sVal}%`;
-    highlight.style.width = `${Math.max(1, eVal - sVal)}%`;
+    highlight.style.left = `${trackLeftPct}%`;
+    highlight.style.width = `${trackWidthPct}%`;
   }
 
   const span = eVal - sVal;
@@ -591,6 +597,21 @@ function syncOpacityIntervalUI() {
   }
   if (statsLabel) {
     statsLabel.textContent = `Position: ${mid}% | Sharpness: ${span}% span`;
+  }
+  if (zoneBadge) {
+    if (sVal < 0 && eVal > 100) {
+      zoneBadge.textContent = '◀ 3D & Upper Overflow ▶';
+      zoneBadge.style.color = '#ff3b5c';
+    } else if (sVal < 0) {
+      zoneBadge.textContent = '◀ 3D View Overflow';
+      zoneBadge.style.color = '#ff3b5c';
+    } else if (eVal > 100) {
+      zoneBadge.textContent = 'Upper Overflow ▶';
+      zoneBadge.style.color = '#ff3b5c';
+    } else {
+      zoneBadge.textContent = 'Standard Span';
+      zoneBadge.style.color = '#37ffe1';
+    }
   }
   if (container) {
     container.style.opacity = isSolid ? '0.6' : '1.0';
@@ -854,10 +875,10 @@ function onGlobalKeyDown(e) {
     const delta = e.shiftKey ? -5 : 5;
 
     if (isLeft) {
-      sVal = constrain(sVal + delta, 0, eVal - 1);
+      sVal = constrain(sVal + delta, -30, eVal - 1);
       settings.opacityStart = sVal / 100.0;
     } else {
-      eVal = constrain(eVal + delta, sVal + 1, 100);
+      eVal = constrain(eVal + delta, sVal + 1, 130);
       settings.opacityEnd = eVal / 100.0;
     }
     saveSettings();
@@ -1139,14 +1160,14 @@ function initModalListeners() {
 
     if (source === 'start') {
       if (sVal >= eVal) {
-        sVal = Math.max(0, eVal - 1);
+        sVal = Math.max(-30, eVal - 1);
         startOpacitySlider.value = sVal;
       }
       startOpacitySlider.style.zIndex = '15';
       endOpacitySlider.style.zIndex = '10';
     } else if (source === 'end') {
       if (eVal <= sVal) {
-        eVal = Math.min(100, sVal + 1);
+        eVal = Math.min(130, sVal + 1);
         endOpacitySlider.value = eVal;
       }
       endOpacitySlider.style.zIndex = '15';
@@ -1170,14 +1191,15 @@ function initModalListeners() {
     opacityWrapper.addEventListener('click', (e) => {
       if (e.target === startOpacitySlider || e.target === endOpacitySlider) return;
       const rect = opacityWrapper.getBoundingClientRect();
-      const clickPct = Math.round(Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)) * 100);
+      const clickRatio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+      const clickVal = Math.round(-30 + clickRatio * 160);
       let sVal = parseInt(startOpacitySlider.value, 10);
       let eVal = parseInt(endOpacitySlider.value, 10);
-      if (Math.abs(clickPct - sVal) < Math.abs(clickPct - eVal)) {
-        startOpacitySlider.value = Math.min(clickPct, eVal - 1);
+      if (Math.abs(clickVal - sVal) < Math.abs(clickVal - eVal)) {
+        startOpacitySlider.value = Math.min(clickVal, eVal - 1);
         handleOpacityInput('start');
       } else {
-        endOpacitySlider.value = Math.max(clickPct, sVal + 1);
+        endOpacitySlider.value = Math.max(clickVal, sVal + 1);
         handleOpacityInput('end');
       }
     });
@@ -1653,37 +1675,56 @@ function draw() {
         rect(xStart, topY, colWidth, 2);
         rect(xStart, topY + h - 2, colWidth, 2);
       } else {
-        // Wall slice overflows into 2D view (topY < 0)
-        // 1) Bottom portion in 3D view (y >= 0 to bottomY): Strictly solid, NO vertical opacity gradient
-        if (bottomY > 0) {
-          fill(0, 0, 0);
-          rect(xStart, 0, colWidth, bottomY);
-
-          fill(55, 255, 225, 180);
-          rect(xStart, bottomY - 2, colWidth, 2);
-        }
-        // 2) Top overflowing portion in 2D view (y < 0): 2 Modes (Transparent Fade Out vs Solid 100% Opaque)
+        // Singularity void slice overflows into 2D view (topY < 0)
         if (isSolidOverflow) {
           // Solid 100% Opaque Mode: fully opaque void block overflowing into 2D arena
+          if (bottomY > 0) {
+            fill(0, 0, 0);
+            rect(xStart, 0, colWidth, bottomY);
+
+            fill(55, 255, 225, 180);
+            rect(xStart, bottomY - 2, colWidth, 2);
+          }
           fill(0, 0, 0);
           rect(xStart, topY, colWidth, -topY);
 
           fill(55, 255, 225, 180);
           rect(xStart, topY, colWidth, 2);
         } else {
-          // Transparent Mode: Atmospheric fade-out gradient with 2-way interval controls (sharpness & position)
+          // Transparent Mode: Atmospheric fade-out gradient with extended 2-way interval controls
+          // Red segments allow fade to extend down into bottom 3D view (vStart < 0) and above top view (vEnd > 1)
           const maxOverflow = Math.min(-topY, sceneH);
-          const fadeH = maxOverflow;
-          const vStart = Math.min(settings.opacityStart !== undefined ? settings.opacityStart : 0.20, 0.98);
-          const vEnd = Math.max(settings.opacityEnd !== undefined ? settings.opacityEnd : 0.85, vStart + 0.01);
+          const fadeH = Math.max(1, maxOverflow);
+          const vStart = settings.opacityStart !== undefined ? settings.opacityStart : 0.20;
+          const vEnd = settings.opacityEnd !== undefined ? settings.opacityEnd : 0.85;
 
-          const grad = drawingContext.createLinearGradient(0, 0, 0, -fadeH);
-          grad.addColorStop(0, 'rgba(0, 0, 0, 1)');
-          grad.addColorStop(constrain(vStart, 0, 1), 'rgba(0, 0, 0, 1)');
-          grad.addColorStop(constrain(vEnd, 0, 1), 'rgba(0, 0, 0, 0)');
-          grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-          drawingContext.fillStyle = grad;
-          drawingContext.fillRect(xStart, -fadeH, colWidth, fadeH);
+          const ySolid = -vStart * fadeH;
+          const yClear = -vEnd * fadeH;
+
+          // 1) Solid Base (below ySolid down to bottomY in 3D view)
+          const solidTop = Math.max(topY, ySolid, -sceneH);
+          const solidBottom = Math.min(bottomY, scene3DH);
+          if (solidBottom > solidTop) {
+            fill(0, 0, 0);
+            rect(xStart, solidTop, colWidth, solidBottom - solidTop);
+          }
+
+          // 2) Fading Gradient (from ySolid to yClear)
+          const fadeTop = Math.max(topY, yClear, -sceneH);
+          const fadeBottom = Math.min(bottomY, ySolid, scene3DH);
+          if (fadeBottom > fadeTop) {
+            const grad = drawingContext.createLinearGradient(0, ySolid, 0, yClear);
+            grad.addColorStop(0, 'rgba(0, 0, 0, 1)');
+            grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            drawingContext.fillStyle = grad;
+            drawingContext.fillRect(xStart, fadeTop, colWidth, fadeBottom - fadeTop);
+          }
+
+          // Accretion halo photon ring along bottom edge
+          if (bottomY > 0) {
+            fill(55, 255, 225, 180);
+            rect(xStart, bottomY - 2, colWidth, 2);
+          }
         }
       }
     } else {
@@ -1709,30 +1750,43 @@ function draw() {
         rect(xStart, topY, colWidth, h);
       } else {
         // Wall slice overflows into 2D view (topY < 0)
-        // 1) Bottom portion in 3D view (y >= 0 to bottomY): Strictly solid, NO vertical opacity gradient
-        if (bottomY > 0) {
-          fill(red, green, blue);
-          rect(xStart, 0, colWidth, bottomY);
-        }
-        // 2) Top overflowing portion in 2D view (y < 0): 2 Modes (Transparent Fade Out vs Solid 100% Opaque)
         if (isSolidOverflow) {
           // Solid 100% Opaque Mode: fully opaque solid blocks overflowing into 2D arena
+          if (bottomY > 0) {
+            fill(red, green, blue);
+            rect(xStart, 0, colWidth, bottomY);
+          }
           fill(red, green, blue);
           rect(xStart, topY, colWidth, -topY);
         } else {
-          // Transparent Mode: Atmospheric fade-out gradient with 2-way interval controls (sharpness & position)
+          // Transparent Mode: Atmospheric fade-out gradient with extended 2-way interval controls
+          // Red segments allow fade to extend down into bottom 3D view (vStart < 0) and above top view (vEnd > 1)
           const maxOverflow = Math.min(-topY, sceneH);
-          const fadeH = maxOverflow;
-          const vStart = Math.min(settings.opacityStart !== undefined ? settings.opacityStart : 0.20, 0.98);
-          const vEnd = Math.max(settings.opacityEnd !== undefined ? settings.opacityEnd : 0.85, vStart + 0.01);
+          const fadeH = Math.max(1, maxOverflow);
+          const vStart = settings.opacityStart !== undefined ? settings.opacityStart : 0.20;
+          const vEnd = settings.opacityEnd !== undefined ? settings.opacityEnd : 0.85;
 
-          const grad = drawingContext.createLinearGradient(0, 0, 0, -fadeH);
-          grad.addColorStop(0, `rgba(${red}, ${green}, ${blue}, 1)`);
-          grad.addColorStop(constrain(vStart, 0, 1), `rgba(${red}, ${green}, ${blue}, 1)`);
-          grad.addColorStop(constrain(vEnd, 0, 1), `rgba(${red}, ${green}, ${blue}, 0)`);
-          grad.addColorStop(1, `rgba(${red}, ${green}, ${blue}, 0)`);
-          drawingContext.fillStyle = grad;
-          drawingContext.fillRect(xStart, -fadeH, colWidth, fadeH);
+          const ySolid = -vStart * fadeH;
+          const yClear = -vEnd * fadeH;
+
+          // 1) Solid Base (below ySolid down to bottomY in 3D view)
+          const solidTop = Math.max(topY, ySolid, -sceneH);
+          const solidBottom = Math.min(bottomY, scene3DH);
+          if (solidBottom > solidTop) {
+            fill(red, green, blue);
+            rect(xStart, solidTop, colWidth, solidBottom - solidTop);
+          }
+
+          // 2) Fading Gradient (from ySolid to yClear)
+          const fadeTop = Math.max(topY, yClear, -sceneH);
+          const fadeBottom = Math.min(bottomY, ySolid, scene3DH);
+          if (fadeBottom > fadeTop) {
+            const grad = drawingContext.createLinearGradient(0, ySolid, 0, yClear);
+            grad.addColorStop(0, `rgba(${red}, ${green}, ${blue}, 1)`);
+            grad.addColorStop(1, `rgba(${red}, ${green}, ${blue}, 0)`);
+            drawingContext.fillStyle = grad;
+            drawingContext.fillRect(xStart, fadeTop, colWidth, fadeBottom - fadeTop);
+          }
         }
       }
     }

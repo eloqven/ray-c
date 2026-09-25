@@ -242,25 +242,59 @@
       gap: 8px;
     }
 
-    /* 2-Way Interval Range Slider */
+    /* 2-Way Interval Range Slider with Red Overflow Segments */
     .dual-range-wrapper {
       position: relative;
       width: 100%;
-      height: 32px;
+      height: 34px;
       display: flex;
       align-items: center;
       user-select: none;
       margin-top: 4px;
     }
-    .dual-range-track {
+    .dual-range-segment-red-left {
       position: absolute;
       left: 0;
-      right: 0;
+      width: 18.75%;
       height: 8px;
-      background: #182030;
-      border-radius: 4px;
-      border: 1px solid #2d3748;
+      background: linear-gradient(90deg, #e53e3e, #ff3b5c);
+      border-radius: 4px 0 0 4px;
+      box-shadow: 0 0 8px rgba(229, 62, 62, 0.45);
       pointer-events: none;
+      z-index: 1;
+    }
+    .dual-range-segment-center {
+      position: absolute;
+      left: 18.75%;
+      width: 62.5%;
+      height: 8px;
+      background: #141b29;
+      border-top: 1px solid #2d3748;
+      border-bottom: 1px solid #2d3748;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .dual-range-segment-red-right {
+      position: absolute;
+      left: 81.25%;
+      width: 18.75%;
+      height: 8px;
+      background: linear-gradient(90deg, #ff3b5c, #e53e3e);
+      border-radius: 0 4px 4px 0;
+      box-shadow: 0 0 8px rgba(229, 62, 62, 0.45);
+      pointer-events: none;
+      z-index: 1;
+    }
+    .dual-range-tick {
+      position: absolute;
+      width: 2px;
+      height: 14px;
+      background: #37ffe1;
+      border-radius: 1px;
+      box-shadow: 0 0 6px rgba(55, 255, 225, 0.85);
+      pointer-events: none;
+      z-index: 3;
+      transform: translateX(-50%);
     }
     .dual-range-highlight {
       position: absolute;
@@ -602,23 +636,45 @@
           <input type="range" id="modal-overflow-slider" min="0" max="1" step="1" value="0" style="display: none;">
         </div>
 
-        <!-- Setting 8b: Vertical Opacity Gradient (Interval / 2-Way Slider) -->
+        <!-- Setting 8b: Vertical Opacity Gradient (Extended Interval / 2-Way Slider with Red Overflow Segments) -->
         <div class="setting-item" id="modal-opacity-gradient-container" style="border-left: 3px solid #ff731a; padding-left: 12px; margin-top: 10px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <label style="margin: 0; font-weight: 600;">Vertical Opacity Gradient (2-Way Interval Slider)</label>
+            <label style="margin: 0; font-weight: 600;">Vertical Opacity Gradient (Extended 2-Way Slider)</label>
             <span id="modal-opacity-interval-label" style="font-size: 13px; color: #ff731a; font-weight: 600;">Fade: 20% → 85%</span>
           </div>
-          <p class="setting-desc" style="margin-bottom: 8px;">Interval slider with 2 configurable ends (left & right buttons). Controls the exact sharpness (transition span) and vertical position of the fade-out gradient (Press <kbd style="background: #222d3d; padding: 2px 6px; border-radius: 4px; border: 1px solid #4a5568; color: #fff;">[</kbd> / <kbd style="background: #222d3d; padding: 2px 6px; border-radius: 4px; border: 1px solid #4a5568; color: #fff;">]</kbd> to adjust in game):</p>
+          <p class="setting-desc" style="margin-bottom: 8px;">2-way slider with <b>2 red overflow segments</b> on each end. Drag into left red segment to fade into the <b>bottom 3D view</b>; drag into right red segment to fade <b>above the top view</b> (Press <kbd style="background: #222d3d; padding: 2px 6px; border-radius: 4px; border: 1px solid #4a5568; color: #fff;">[</kbd> / <kbd style="background: #222d3d; padding: 2px 6px; border-radius: 4px; border: 1px solid #4a5568; color: #fff;">]</kbd> in game):</p>
+          
           <div class="dual-range-wrapper" id="modal-opacity-wrapper">
-            <div class="dual-range-track"></div>
-            <div id="modal-opacity-highlight-bar" class="dual-range-highlight" style="left: 20%; width: 65%;"></div>
-            <input type="range" id="modal-opacity-start-slider" class="dual-range-input dual-range-left" min="0" max="100" step="1" value="20" title="Fade Start: 100% Solid limit">
-            <input type="range" id="modal-opacity-end-slider" class="dual-range-input dual-range-right" min="0" max="100" step="1" value="85" title="Fade End: 0% Transparent cutoff">
+            <!-- Left Red Segment: Overflow into bottom 3D view (-30% to 0%) -->
+            <div class="dual-range-segment-red-left" title="Overflow into bottom [3D] view below (-30% to 0%)"></div>
+            <!-- Center Segment: Normal 2D Arena Overflow (0% to 100%) -->
+            <div class="dual-range-segment-center" title="Normal 2D Arena Overflow (0% to 100%)"></div>
+            <!-- Right Red Segment: Upper Overflow beyond top (100% to +130%) -->
+            <div class="dual-range-segment-red-right" title="Upper Overflow beyond top (+100% to +130%)"></div>
+            
+            <!-- Ticks at 0% split and 100% top -->
+            <div class="dual-range-tick" style="left: 18.75%;" title="0% Split Line"></div>
+            <div class="dual-range-tick" style="left: 81.25%;" title="100% Top Arena Limit"></div>
+
+            <!-- Active Interval Highlight Bar -->
+            <div id="modal-opacity-highlight-bar" class="dual-range-highlight"></div>
+
+            <!-- Left and Right thumbs covering -30 to 130 -->
+            <input type="range" id="modal-opacity-start-slider" class="dual-range-input dual-range-left" min="-30" max="130" step="1" value="20" title="Fade Start: 100% Solid limit (can extend into 3D view)">
+            <input type="range" id="modal-opacity-end-slider" class="dual-range-input dual-range-right" min="-30" max="130" step="1" value="85" title="Fade End: 0% Cutoff (can extend above top)">
           </div>
-          <div style="display: flex; justify-content: space-between; font-size: 11px; color: #8e9bb0; margin-top: 2px;">
-            <span>Split Line (100% Solid)</span>
+
+          <!-- Segment legend under track -->
+          <div style="display: flex; justify-content: space-between; font-size: 10px; color: #8e9bb0; margin-top: 3px;">
+            <span style="color: #ff3b5c; font-weight: 600;">◀ 3D View (-30%)</span>
+            <span style="color: #37ffe1; font-weight: 600;">Split (0%)</span>
+            <span style="color: #37ffe1; font-weight: 600;">Top (100%)</span>
+            <span style="color: #ff3b5c; font-weight: 600;">Upper (+30%) ▶</span>
+          </div>
+
+          <div style="display: flex; justify-content: space-between; font-size: 11px; color: #8e9bb0; margin-top: 4px;">
             <span id="modal-opacity-stats-label" style="color: #37ffe1; font-weight: 600;">Position: 52.5% | Sharpness: 65% span</span>
-            <span>Top (0% Transparent)</span>
+            <span id="modal-opacity-zone-badge" style="color: #a0aec0; font-size: 10px; font-weight: 600;">Normal Span</span>
           </div>
         </div>
 
