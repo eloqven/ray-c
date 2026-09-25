@@ -71,7 +71,7 @@ var tapHistory = {
   ArrowRight: []
 };
 
-const orderMagnitudes = [10, 1, 0.1, 0.01, 0.001, 0.0001, 100];
+const orderMagnitudes = [10, 1, 0.1, 0.01, 0.001, 0.0001, 0.00001, 0.000001, 0.0000001];
 var sliderMagnitude = 1;
 
 var averageFPS = 60;
@@ -391,6 +391,13 @@ function setSliderMagnitude(mag) {
   saveSettings();
   const magBadge = document.getElementById('modal-step-badge');
   if (magBadge) magBadge.textContent = `${sliderMagnitude}x`;
+  document.querySelectorAll('.btn-mag').forEach(btn => {
+    if (parseFloat(btn.dataset.mag) === mag) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
   showSaveToast(`Step Magnitude: ${sliderMagnitude}x`);
 }
 
@@ -437,33 +444,103 @@ function updateSliderSteps() {
   if (magBadge) magBadge.textContent = `${sliderMagnitude}x`;
 }
 
+function getSliderBounds(sliderObj) {
+  if (!sliderObj || !sliderObj.slider || !sliderObj.slider.elt) return null;
+  const elt = sliderObj.slider.elt;
+  const nomMin = sliderObj.nomMin !== undefined ? sliderObj.nomMin : parseFloat(elt.min);
+  const nomMax = sliderObj.nomMax !== undefined ? sliderObj.nomMax : parseFloat(elt.max);
+  const span = nomMax - nomMin;
+  const rawExtMin = nomMin - 0.10 * span;
+  const rawExtMax = nomMax + 0.10 * span;
+
+  let extMin = rawExtMin;
+  if (sliderObj.index === 0 && extMin < 0) extMin = 0;       // FOV
+  if (sliderObj.index === 1 && extMin < 0.05) extMin = 0.05; // Density
+  if (sliderObj.index === 2 && extMin < 0) extMin = 0;       // LOD Dist
+  if (sliderObj.index === 3 && extMin < 0.5) extMin = 0.5;   // Max Chunk
+  if (sliderObj.index === 4 && extMin < 2) extMin = 2;       // Split
+  if (sliderObj.index === 6 && extMin < 0) extMin = 0;       // Gravity
+  if (sliderObj.index === 8 && extMin < 0) extMin = 0;       // Singularity radius
+  if (sliderObj.index === 10) extMin = 0;                    // Overflow
+
+  let extMax = rawExtMax;
+  if (sliderObj.index === 4 && extMax > 98) extMax = 98;     // Split
+  if (sliderObj.index === 10) extMax = 1;
+
+  return { nomMin, nomMax, extMin: +extMin.toFixed(4), extMax: +extMax.toFixed(4) };
+}
+
+function updateSliderVisual(sliderObj) {
+  if (!sliderObj || !sliderObj.slider || !sliderObj.slider.elt) return;
+  const elt = sliderObj.slider.elt;
+  const bounds = getSliderBounds(sliderObj);
+  if (!bounds || sliderObj.index === 10) return;
+
+  const val = (sliderObj.slider._actualValue !== undefined) ? sliderObj.slider._actualValue : parseFloat(elt.value);
+  const isOver = val > bounds.nomMax + 0.0001;
+  const isUnder = val < bounds.nomMin - 0.0001;
+
+  if (isOver || isUnder) {
+    elt.style.accentColor = '#ff3b5c';
+    elt.style.filter = 'drop-shadow(0 0 8px rgba(255, 59, 92, 0.95))';
+  } else {
+    elt.style.accentColor = '#37ffe1';
+    elt.style.filter = 'none';
+  }
+}
+
 function initEngineSliders() {
   allEngineSliders = [
-    { index: 0, keyTag: '1', name: 'FOV', slider: sliderFOV, base: 1, onInput: onFOVChanged },
-    { index: 1, keyTag: '2', name: 'Density', slider: sliderDensity, base: 0.05, onInput: onDensityChanged },
-    { index: 2, keyTag: '3', name: 'LOD Dist', slider: sliderThreshold, base: 25, onInput: onLODChanged },
-    { index: 3, keyTag: '4', name: 'Max Chunk', slider: sliderMaxChunk, base: 1, onInput: onLODChanged },
-    { index: 4, keyTag: '5', name: 'Split', slider: sliderSplit, base: 10, onInput: onSplitChanged },
-    { index: 5, keyTag: '6', name: 'Curve', slider: sliderCurve, base: 1, onInput: onCurveChanged },
-    { index: 6, keyTag: '7', name: 'Gravity', slider: sliderGravity, base: 10, onInput: onGravityChanged },
-    { index: 7, keyTag: '8', name: 'Fish Eye', slider: sliderFishEye, base: 0.05, onInput: onFishEyeChanged },
-    { index: 8, keyTag: '9', name: 'Singularity', slider: sliderRadius, base: 1, onInput: onRadiusChanged },
-    { index: 9, keyTag: '0', name: 'Escape Drift', slider: sliderEscape, base: 0.05, onInput: onEscapeChanged },
-    { index: 10, keyTag: '-', name: 'Top Overflow', slider: sliderOverflow, base: 1, onInput: onOverflowChanged }
+    { index: 0, keyTag: '1', name: 'FOV', slider: sliderFOV, base: 1, nomMin: 0, nomMax: 721, onInput: onFOVChanged },
+    { index: 1, keyTag: '2', name: 'Density', slider: sliderDensity, base: 0.05, nomMin: 0.1, nomMax: 3.0, onInput: onDensityChanged },
+    { index: 2, keyTag: '3', name: 'LOD Dist', slider: sliderThreshold, base: 25, nomMin: 100, nomMax: 2500, onInput: onLODChanged },
+    { index: 3, keyTag: '4', name: 'Max Chunk', slider: sliderMaxChunk, base: 1, nomMin: 1, nomMax: 16, onInput: onLODChanged },
+    { index: 4, keyTag: '5', name: 'Split', slider: sliderSplit, base: 10, nomMin: 10, nomMax: 90, onInput: onSplitChanged },
+    { index: 5, keyTag: '6', name: 'Curve', slider: sliderCurve, base: 1, nomMin: -60, nomMax: 60, onInput: onCurveChanged },
+    { index: 6, keyTag: '7', name: 'Gravity', slider: sliderGravity, base: 10, nomMin: 0, nomMax: 3000, onInput: onGravityChanged },
+    { index: 7, keyTag: '8', name: 'Fish Eye', slider: sliderFishEye, base: 0.05, nomMin: 0.0, nomMax: 2.0, onInput: onFishEyeChanged },
+    { index: 8, keyTag: '9', name: 'Singularity', slider: sliderRadius, base: 1, nomMin: 0, nomMax: 40, onInput: onRadiusChanged },
+    { index: 9, keyTag: '0', name: 'Escape Drift', slider: sliderEscape, base: 0.05, nomMin: 0.0, nomMax: 1.0, onInput: onEscapeChanged },
+    { index: 10, keyTag: '-', name: 'Top Overflow', slider: sliderOverflow, base: 1, nomMin: 0, nomMax: 1, onInput: onOverflowChanged }
   ];
 
   allEngineSliders.forEach((item, idx) => {
     if (item.slider && item.slider.elt) {
+      const s = item.slider;
+      const elt = s.elt;
       if (idx !== 10) {
-        item.slider.elt.step = 'any';
+        elt.step = 'any';
       }
-      item.slider.elt.addEventListener('focus', () => { selectedSliderIndex = idx; });
-      item.slider.elt.addEventListener('mousedown', () => {
+
+      if (s._actualValue === undefined) {
+        s._actualValue = parseFloat(elt.value);
+      }
+
+      s.value = function(v) {
+        if (arguments.length > 0) {
+          s._actualValue = parseFloat(v);
+          if (item.nomMin !== undefined && item.nomMax !== undefined) {
+            elt.value = Math.max(item.nomMin, Math.min(item.nomMax, v));
+          } else {
+            elt.value = v;
+          }
+          updateSliderVisual(item);
+          return s;
+        }
+        return (s._actualValue !== undefined) ? s._actualValue : parseFloat(elt.value);
+      };
+
+      elt.addEventListener('focus', () => { selectedSliderIndex = idx; });
+      elt.addEventListener('mousedown', () => {
         selectedSliderIndex = idx;
       });
-      item.slider.elt.addEventListener('input', () => {
+      elt.addEventListener('input', () => {
+        s._actualValue = parseFloat(elt.value);
+        updateSliderVisual(item);
         selectedSliderIndex = idx;
       });
+
+      updateSliderVisual(item);
     }
   });
 }
@@ -701,20 +778,24 @@ function stepSlider(sliderObj, direction) {
     setOverflowMode(newMode);
     return;
   }
-  const elt = sliderObj.slider.elt;
-  const minVal = parseFloat(elt.min);
-  const maxVal = parseFloat(elt.max);
-  const step = Math.max(0.001, +(sliderObj.base * sliderMagnitude).toPrecision(4));
-  let currVal = parseFloat(elt.value);
+
+  const bounds = getSliderBounds(sliderObj);
+  const nomMin = bounds ? bounds.nomMin : parseFloat(sliderObj.slider.elt.min);
+  const nomMax = bounds ? bounds.nomMax : parseFloat(sliderObj.slider.elt.max);
+  const extMin = bounds ? bounds.extMin : nomMin;
+  const extMax = bounds ? bounds.extMax : nomMax;
+
+  const step = Math.max(0.0000001, +(sliderObj.base * sliderMagnitude).toPrecision(6));
+  let currVal = (sliderObj.slider._actualValue !== undefined) ? sliderObj.slider._actualValue : parseFloat(sliderObj.slider.elt.value);
 
   let nextVal = currVal + direction * step;
-  if (nextVal >= maxVal) {
-    nextVal = maxVal;
+  if (nextVal >= extMax) {
+    nextVal = extMax;
     if (autoSlideState.active && autoSlideState.sliderObj === sliderObj) {
       autoSlideState.direction = -1;
     }
-  } else if (nextVal <= minVal) {
-    nextVal = minVal;
+  } else if (nextVal <= extMin) {
+    nextVal = extMin;
     if (autoSlideState.active && autoSlideState.sliderObj === sliderObj) {
       autoSlideState.direction = 1;
     }
@@ -725,7 +806,8 @@ function stepSlider(sliderObj, direction) {
   nextVal = parseFloat(nextVal.toFixed(Math.max(2, decimals)));
 
   sliderObj.slider.value(nextVal);
-  elt.value = nextVal;
+  updateSliderVisual(sliderObj);
+
   if (sliderObj.onInput) {
     sliderObj.onInput();
   }
@@ -767,6 +849,24 @@ function onGlobalKeyDown(e) {
 
   if (e.target && (e.target.tagName === 'INPUT' && (e.target.type === 'text' || e.target.type === 'color'))) return;
 
+  // Ctrl + Shift + Up / Down: modify the hypothetical Shift + 1..9 magnitude slider
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.code === 'ArrowUp' || e.code === 'ArrowDown')) {
+    e.preventDefault();
+    e.stopPropagation();
+    let currIdx = orderMagnitudes.indexOf(sliderMagnitude);
+    if (currIdx === -1) currIdx = 1;
+
+    const isUp = (e.key === 'ArrowUp' || e.code === 'ArrowUp');
+    // ArrowUp: higher magnitude (towards index 0: 10x)
+    // ArrowDown: finer magnitude (towards index 8: 0.0000001x)
+    let newIdx = isUp ? currIdx - 1 : currIdx + 1;
+    newIdx = Math.max(0, Math.min(orderMagnitudes.length - 1, newIdx));
+
+    setSliderMagnitude(orderMagnitudes[newIdx]);
+    showSaveToast(`Step Magnitude: ${orderMagnitudes[newIdx]}x (Shift+${newIdx + 1} / Level ${newIdx + 1} of 9)`);
+    return;
+  }
+
   // Un-trigger auto-slide ONLY if Ctrl + Shift keys are pressed at the same time
   const isCtrlShift = (e.ctrlKey || e.key === 'Control') && (e.shiftKey || e.key === 'Shift');
   if (isCtrlShift && autoSlideState.active) {
@@ -798,36 +898,23 @@ function onGlobalKeyDown(e) {
     }
   }
 
-  // Shift + 1..6 for direct magnitude selection (10x coarse down to 0.0001x ultra-fine)
+  // Shift + 1..9 for direct magnitude selection (10x coarse down to 0.0000001x ultra-fine)
   if (e.shiftKey && !e.ctrlKey && !e.altKey) {
-    if (e.code === 'Digit1' || e.key === '!' || e.key === '1') {
+    const shiftDigitMap = {
+      Digit1: 10, '!': 10, '1': 10,
+      Digit2: 1, '@': 1, '2': 1,
+      Digit3: 0.1, '#': 0.1, '3': 0.1,
+      Digit4: 0.01, '$': 0.01, '4': 0.01,
+      Digit5: 0.001, '%': 0.001, '5': 0.001,
+      Digit6: 0.0001, '^': 0.0001, '6': 0.0001,
+      Digit7: 0.00001, '&': 0.00001, '7': 0.00001,
+      Digit8: 0.000001, '*': 0.000001, '8': 0.000001,
+      Digit9: 0.0000001, '(': 0.0000001, '9': 0.0000001
+    };
+    const targetMag = shiftDigitMap[e.code] !== undefined ? shiftDigitMap[e.code] : shiftDigitMap[e.key];
+    if (targetMag !== undefined) {
       e.preventDefault();
-      setSliderMagnitude(10);
-      return;
-    }
-    if (e.code === 'Digit2' || e.key === '@' || e.key === '2') {
-      e.preventDefault();
-      setSliderMagnitude(1);
-      return;
-    }
-    if (e.code === 'Digit3' || e.key === '#' || e.key === '3') {
-      e.preventDefault();
-      setSliderMagnitude(0.1);
-      return;
-    }
-    if (e.code === 'Digit4' || e.key === '$' || e.key === '4') {
-      e.preventDefault();
-      setSliderMagnitude(0.01);
-      return;
-    }
-    if (e.code === 'Digit5' || e.key === '%' || e.key === '5') {
-      e.preventDefault();
-      setSliderMagnitude(0.001);
-      return;
-    }
-    if (e.code === 'Digit6' || e.key === '^' || e.key === '6') {
-      e.preventDefault();
-      setSliderMagnitude(0.0001);
+      setSliderMagnitude(targetMag);
       return;
     }
   }
@@ -1805,18 +1892,18 @@ function renderHUD() {
   // Left slider labels background panel (contains all 11 sliders + step multiplier)
   fill(10, 15, 25, 225);
   rectMode(CORNER);
-  rect(5, 2, 370, 254, 8);
+  rect(5, 2, 400, 254, 8);
 
   const sliderLabels = [
-    `[1] FOV: ${sliderFOV.value()}°`,
-    `[2] Density: ${sliderDensity.value().toFixed(1)}/° (${(1/sliderDensity.value()).toFixed(2)}°)`,
-    `[3] LOD Dist: ${sliderThreshold.value()}px`,
-    `[4] Max Chunk: ${sliderMaxChunk.value()}x`,
-    `[5] Split: ${sliderSplit.value()}% Top / ${100 - sliderSplit.value()}% 3D`,
-    `[6] Curve: ${sliderCurve.value() > 0 ? '+' : ''}${sliderCurve.value()}°`,
-    `[7] Gravity: ${sliderGravity.value() > 0 ? sliderGravity.value() + ' M' : '0 (Off)'}`,
+    `[1] FOV: ${sliderFOV.value().toFixed(0)}°`,
+    `[2] Density: ${sliderDensity.value().toFixed(2)}/° (${(1/sliderDensity.value()).toFixed(2)}°)`,
+    `[3] LOD Dist: ${sliderThreshold.value().toFixed(0)}px`,
+    `[4] Max Chunk: ${sliderMaxChunk.value().toFixed(1)}x`,
+    `[5] Split: ${sliderSplit.value().toFixed(0)}% Top / ${(100 - sliderSplit.value()).toFixed(0)}% 3D`,
+    `[6] Curve: ${sliderCurve.value() > 0 ? '+' : ''}${sliderCurve.value().toFixed(1)}°`,
+    `[7] Gravity: ${sliderGravity.value() > 0 ? sliderGravity.value().toFixed(0) + ' M' : '0 (Off)'}`,
     `[8] Fish Eye: ${Math.round(sliderFishEye.value() * 100)}%${sliderFishEye.value() === 0 ? ' (Flat)' : ''}${settings.linkFishEyeChroma !== false ? ' [Chroma Pos Merged]' : ''}`,
-    `[9] Singularity: ${sliderRadius.value()}px${sliderRadius.value() === 0 ? ' (0px: Orbit)' : ' (Eats)'}`,
+    `[9] Singularity: ${sliderRadius.value().toFixed(1)}px${sliderRadius.value() === 0 ? ' (0px: Orbit)' : ' (Eats)'}`,
     `[0] Escape Drift: ${sliderEscape.value().toFixed(2)}${sliderEscape.value() === 0 ? ' (Closed)' : ' (Spiral)'}`,
     `[-] Overflow: ${settings.overflowMode === 'solid' ? 'Solid 100%' : 'Fade: ' + Math.round((settings.opacityStart !== undefined ? settings.opacityStart : 0.20) * 100) + '%→' + Math.round((settings.opacityEnd !== undefined ? settings.opacityEnd : 0.85) * 100) + '%'}`
   ];
@@ -1825,17 +1912,31 @@ function renderHUD() {
     const yPos = 18 + idx * 20;
     const isSelected = (idx === selectedSliderIndex);
     const isAutoRunning = (autoSlideState.active && autoSlideState.sliderObj && autoSlideState.sliderObj.index === idx);
+    const item = allEngineSliders[idx];
+    const val = (item && item.slider) ? item.slider.value() : null;
+    const isOver = item && item.nomMax !== undefined && val > item.nomMax + 0.0001;
+    const isUnder = item && item.nomMin !== undefined && val < item.nomMin - 0.0001;
 
-    if (isAutoRunning) {
+    let labelText = sliderLabels[idx];
+    if (isOver) {
+      labelText += ' [MAXED 🔴]';
+    } else if (isUnder) {
+      labelText += ' [MINED 🔴]';
+    }
+
+    if (isOver || isUnder) {
+      fill(255, 59, 92);
+      text(`${isSelected ? '▶ ' : ''}${labelText}`, isSelected ? 172 : 180, yPos);
+    } else if (isAutoRunning) {
       const pulse = (Math.floor(millis() / 200) % 2 === 0);
       fill(pulse ? color(255, 115, 26) : color(55, 255, 225));
-      text(`${autoSlideState.direction > 0 ? '▶▶' : '◀◀'} ${sliderLabels[idx]}`, 172, yPos);
+      text(`${autoSlideState.direction > 0 ? '▶▶' : '◀◀'} ${labelText}`, 172, yPos);
     } else if (isSelected) {
       fill(55, 255, 225);
-      text(`▶ ${sliderLabels[idx]}`, 172, yPos);
+      text(`▶ ${labelText}`, 172, yPos);
     } else {
       fill(220);
-      text(sliderLabels[idx], 180, yPos);
+      text(labelText, 180, yPos);
     }
   }
 
@@ -1846,7 +1947,7 @@ function renderHUD() {
     text(`⚡ AUTO ${autoSlideState.direction > 0 ? '▶▶' : '◀◀'} [${autoSlideState.sliderObj.name}]  (Ctrl+Shift to stop)`, 180, 238);
   } else {
     fill(55, 255, 225);
-    text(`Step: ${sliderMagnitude}x  [Shift+3x◀/▶: Auto | Ctrl+Shift: Stop | 1..0,-]`, 180, 238);
+    text(`Step: ${sliderMagnitude}x  [Shift+1..9 / Ctrl+Shift+↑/↓ | 3x◀/▶: Auto]`, 180, 238);
   }
 
   // Right diagnostics panel (anchored before the ⚙ Settings button)
