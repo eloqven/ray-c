@@ -17,6 +17,7 @@ const defaultSettings = {
   singularityX: 0.65,
   singularityY: 0.45,
   fishEye: 0.0,
+  overflowMode: 'transparent',
   overflowOpacity: 0.35,
   magnitude: 1
 };
@@ -110,7 +111,14 @@ function loadSettings() {
   if (settings.singularityX === undefined) settings.singularityX = defaultSettings.singularityX;
   if (settings.singularityY === undefined) settings.singularityY = defaultSettings.singularityY;
   if (settings.fishEye === undefined) settings.fishEye = defaultSettings.fishEye;
-  if (settings.overflowOpacity === undefined) settings.overflowOpacity = defaultSettings.overflowOpacity;
+  if (settings.overflowMode === undefined) {
+    if (settings.overflowOpacity !== undefined && settings.overflowOpacity >= 0.99) {
+      settings.overflowMode = 'solid';
+    } else {
+      settings.overflowMode = 'transparent';
+    }
+  }
+  if (settings.overflowOpacity === undefined) settings.overflowOpacity = (settings.overflowMode === 'solid' ? 1.0 : 0.35);
   if (settings.magnitude === undefined || !orderMagnitudes.includes(settings.magnitude)) {
     sliderMagnitude = 1;
   } else {
@@ -149,7 +157,11 @@ function saveGameState(showFeedback = true) {
     if (sliderFishEye) settings.fishEye = sliderFishEye.value();
     if (sliderRadius) settings.singularityRadius = sliderRadius.value();
     if (sliderEscape) settings.escapeFactor = sliderEscape.value();
-    if (sliderOverflow) settings.overflowOpacity = sliderOverflow.value();
+    if (sliderOverflow) {
+      const v = sliderOverflow.value();
+      settings.overflowOpacity = v;
+      settings.overflowMode = v >= 0.5 ? 'solid' : 'transparent';
+    }
     settings.magnitude = sliderMagnitude;
 
     // 2. Capture player state (normalized coordinates resilient to resize + heading)
@@ -216,6 +228,7 @@ function saveSettings() {
       singularityX: settings.singularityX,
       singularityY: settings.singularityY,
       fishEye: settings.fishEye,
+      overflowMode: settings.overflowMode,
       overflowOpacity: settings.overflowOpacity,
       magnitude: sliderMagnitude
     });
@@ -337,8 +350,9 @@ function setup() {
   styleSlider(sliderEscape);
   sliderEscape.input(onEscapeChanged);
 
-  // Control 11 (Key -): Top Wall Overflow Opacity Gradient (0.00 to 1.00)
-  sliderOverflow = createSlider(0.0, 1.0, settings.overflowOpacity !== undefined ? settings.overflowOpacity : 0.35, 0.05);
+  // Control 11 (Key -): Top Wall Overflow Mode (0 = Transparent Fade Out, 1 = Solid 100% Opaque)
+  const initialOverflowVal = settings.overflowMode === 'solid' ? 1 : 0;
+  sliderOverflow = createSlider(0, 1, initialOverflowVal, 1);
   sliderOverflow.position(10, 205);
   styleSlider(sliderOverflow);
   sliderOverflow.input(onOverflowChanged);
@@ -364,7 +378,7 @@ function setSliderMagnitude(mag) {
 function updateSliderSteps() {
   const sliders = [
     sliderFOV, sliderDensity, sliderThreshold, sliderMaxChunk,
-    sliderSplit, sliderCurve, sliderGravity, sliderFishEye, sliderRadius, sliderEscape, sliderOverflow
+    sliderSplit, sliderCurve, sliderGravity, sliderFishEye, sliderRadius, sliderEscape
   ];
 
   for (let s of sliders) {
@@ -374,17 +388,30 @@ function updateSliderSteps() {
     }
   }
 
+  // Slider 11 (Overflow) is a discrete 2-mode toggle (0 = Transparent, 1 = Solid)
+  if (sliderOverflow && sliderOverflow.elt) {
+    sliderOverflow.elt.step = '1';
+    sliderOverflow.elt.min = '0';
+    sliderOverflow.elt.max = '1';
+  }
+
   // Update modal inputs to 'any' as well
   const modalSliders = [
     'modal-split-slider', 'modal-walls-slider', 'modal-curve-slider', 'modal-gravity-slider',
-    'modal-fisheye-slider', 'modal-radius-slider', 'modal-escape-slider',
-    'modal-overflow-slider'
+    'modal-fisheye-slider', 'modal-radius-slider', 'modal-escape-slider'
   ];
   for (let id of modalSliders) {
     const el = document.getElementById(id);
     if (el) {
       el.step = 'any';
     }
+  }
+
+  const modalOverflowEl = document.getElementById('modal-overflow-slider');
+  if (modalOverflowEl) {
+    modalOverflowEl.step = '1';
+    modalOverflowEl.min = '0';
+    modalOverflowEl.max = '1';
   }
 
   const magBadge = document.getElementById('modal-step-badge');
@@ -403,12 +430,14 @@ function initEngineSliders() {
     { index: 7, keyTag: '8', name: 'Fish Eye', slider: sliderFishEye, base: 0.05, onInput: onFishEyeChanged },
     { index: 8, keyTag: '9', name: 'Singularity', slider: sliderRadius, base: 1, onInput: onRadiusChanged },
     { index: 9, keyTag: '0', name: 'Escape Drift', slider: sliderEscape, base: 0.05, onInput: onEscapeChanged },
-    { index: 10, keyTag: '-', name: 'Top Overflow', slider: sliderOverflow, base: 0.05, onInput: onOverflowChanged }
+    { index: 10, keyTag: '-', name: 'Top Overflow', slider: sliderOverflow, base: 1, onInput: onOverflowChanged }
   ];
 
   allEngineSliders.forEach((item, idx) => {
     if (item.slider && item.slider.elt) {
-      item.slider.elt.step = 'any';
+      if (idx !== 10) {
+        item.slider.elt.step = 'any';
+      }
       item.slider.elt.addEventListener('focus', () => { selectedSliderIndex = idx; });
       item.slider.elt.addEventListener('mousedown', () => {
         stopAutoSlide();
@@ -462,24 +491,58 @@ function changeWallCount(delta) {
   setWallCount(current + delta);
 }
 
-function formatOverflowLabel(val) {
-  const pct = Math.round(val * 100);
-  if (pct <= 1) return '0% (Hard Cutoff)';
-  if (pct >= 99) return '100% (Solid Overflow)';
-  return `${pct}% (Fade Out Gradient)`;
+function formatOverflowLabel(modeOrVal) {
+  if (modeOrVal === 'solid' || modeOrVal === 1 || modeOrVal === '1') {
+    return 'Solid 100% Opaque';
+  }
+  return 'Transparent (Fade Out)';
+}
+
+function setOverflowMode(mode) {
+  const newMode = (mode === 'solid') ? 'solid' : 'transparent';
+  settings.overflowMode = newMode;
+  settings.overflowOpacity = (newMode === 'solid') ? 1.0 : 0.35;
+  if (sliderOverflow) {
+    sliderOverflow.value(newMode === 'solid' ? 1 : 0);
+  }
+  saveSettings();
+  syncOverflowUI();
+}
+
+function toggleOverflowMode() {
+  const newMode = (settings.overflowMode === 'solid') ? 'transparent' : 'solid';
+  setOverflowMode(newMode);
+}
+
+function syncOverflowUI() {
+  const isSolid = (settings.overflowMode === 'solid');
+  const labelText = isSolid ? 'Solid 100% Opaque' : 'Transparent (Fade Out)';
+
+  const modalOverflowLabel = document.getElementById('modal-overflow-label');
+  if (modalOverflowLabel) {
+    modalOverflowLabel.textContent = labelText;
+  }
+
+  const modalOverflowSlider = document.getElementById('modal-overflow-slider');
+  if (modalOverflowSlider) {
+    modalOverflowSlider.value = isSolid ? 1 : 0;
+  }
+
+  document.querySelectorAll('.btn-overflow-mode').forEach(btn => {
+    const mode = btn.getAttribute('data-mode');
+    if (mode === settings.overflowMode) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
 }
 
 function onOverflowChanged() {
   if (!sliderOverflow) return;
-  const val = sliderOverflow.value();
-  settings.overflowOpacity = val;
-  saveSettings();
-  const modalOverflowSlider = document.getElementById('modal-overflow-slider');
-  const modalOverflowLabel = document.getElementById('modal-overflow-label');
-  if (modalOverflowSlider) modalOverflowSlider.value = val;
-  if (modalOverflowLabel) {
-    modalOverflowLabel.textContent = formatOverflowLabel(val);
-  }
+  const val = parseFloat(sliderOverflow.value());
+  const newMode = val >= 0.5 ? 'solid' : 'transparent';
+  setOverflowMode(newMode);
 }
 
 function getActiveSliderObj() {
@@ -498,6 +561,11 @@ function getActiveSliderObj() {
 
 function stepSlider(sliderObj, direction) {
   if (!sliderObj || !sliderObj.slider || !sliderObj.slider.elt) return;
+  if (sliderObj.index === 10) {
+    const newMode = direction > 0 ? 'solid' : 'transparent';
+    setOverflowMode(newMode);
+    return;
+  }
   const elt = sliderObj.slider.elt;
   const minVal = parseFloat(elt.min);
   const maxVal = parseFloat(elt.max);
@@ -636,6 +704,9 @@ function onGlobalKeyDown(e) {
     const targetIdx = digitMap[e.code] !== undefined ? digitMap[e.code] : digitMap[e.key];
     if (targetIdx !== undefined && e.code !== 'NumpadSubtract') {
       e.preventDefault();
+      if (targetIdx === 10) {
+        toggleOverflowMode();
+      }
       selectSliderByIndex(targetIdx);
       return;
     }
@@ -764,10 +835,7 @@ function initModalListeners() {
     if (modalEscapeSlider) modalEscapeSlider.value = settings.escapeFactor;
     if (modalEscapeLabel) modalEscapeLabel.textContent = `${settings.escapeFactor.toFixed(2)}${settings.escapeFactor === 0 ? ' (Closed Orbit)' : ' (Spiral Outward)'}`;
 
-    if (modalOverflowSlider) modalOverflowSlider.value = settings.overflowOpacity;
-    if (modalOverflowLabel) {
-      modalOverflowLabel.textContent = formatOverflowLabel(settings.overflowOpacity);
-    }
+    syncOverflowUI();
 
     const magBadge = document.getElementById('modal-step-badge');
     if (magBadge) magBadge.textContent = `${sliderMagnitude}x`;
@@ -897,21 +965,14 @@ function initModalListeners() {
   if (modalOverflowSlider) {
     modalOverflowSlider.addEventListener('input', (e) => {
       const val = parseFloat(e.target.value);
-      settings.overflowOpacity = val;
-      if (modalOverflowLabel) modalOverflowLabel.textContent = formatOverflowLabel(val);
-      if (sliderOverflow) sliderOverflow.value(val);
-      saveSettings();
+      setOverflowMode(val >= 0.5 ? 'solid' : 'transparent');
     });
   }
 
-  document.querySelectorAll('.btn-overflow-toggle').forEach(btn => {
+  document.querySelectorAll('.btn-overflow-mode').forEach(btn => {
     btn.addEventListener('click', (e) => {
-      const val = parseFloat(e.currentTarget.getAttribute('data-val'));
-      settings.overflowOpacity = val;
-      if (modalOverflowSlider) modalOverflowSlider.value = val;
-      if (sliderOverflow) sliderOverflow.value(val);
-      if (modalOverflowLabel) modalOverflowLabel.textContent = formatOverflowLabel(val);
-      saveSettings();
+      const mode = e.currentTarget.getAttribute('data-mode');
+      setOverflowMode(mode);
     });
   });
 
@@ -926,7 +987,11 @@ function initModalListeners() {
       if (modalFishEyeSlider) settings.fishEye = parseFloat(modalFishEyeSlider.value);
       if (modalRadiusSlider) settings.singularityRadius = parseFloat(modalRadiusSlider.value);
       if (modalEscapeSlider) settings.escapeFactor = parseFloat(modalEscapeSlider.value);
-      if (modalOverflowSlider) settings.overflowOpacity = parseFloat(modalOverflowSlider.value);
+      if (modalOverflowSlider) {
+        const val = parseFloat(modalOverflowSlider.value);
+        settings.overflowMode = val >= 0.5 ? 'solid' : 'transparent';
+        settings.overflowOpacity = val >= 0.5 ? 1.0 : 0.35;
+      }
       saveSettings();
       window.location.reload();
     });
@@ -943,7 +1008,10 @@ function initModalListeners() {
       if (modalFishEyeSlider) settings.fishEye = parseFloat(modalFishEyeSlider.value);
       if (modalRadiusSlider) settings.singularityRadius = parseFloat(modalRadiusSlider.value);
       if (modalEscapeSlider) settings.escapeFactor = parseFloat(modalEscapeSlider.value);
-      if (modalOverflowSlider) settings.overflowOpacity = parseFloat(modalOverflowSlider.value);
+      if (modalOverflowSlider) {
+        const val = parseFloat(modalOverflowSlider.value);
+        setOverflowMode(val >= 0.5 ? 'solid' : 'transparent');
+      }
       if (singularity) {
         singularity.mass = settings.gravityMass;
         singularity.radius = settings.singularityRadius;
@@ -955,7 +1023,8 @@ function initModalListeners() {
       if (sliderFishEye) sliderFishEye.value(settings.fishEye);
       if (sliderRadius) sliderRadius.value(settings.singularityRadius);
       if (sliderEscape) sliderEscape.value(settings.escapeFactor);
-      if (sliderOverflow) sliderOverflow.value(settings.overflowOpacity);
+      if (sliderOverflow) sliderOverflow.value(settings.overflowMode === 'solid' ? 1 : 0);
+      syncOverflowUI();
       applyLiveLayout();
       modal.classList.add('hidden');
     });
@@ -1286,7 +1355,7 @@ function draw() {
     const colWidth = Math.max(1, xEnd - xStart);
     const topY = halfH - h / 2;
     const bottomY = topY + h;
-    const overflowVal = (settings.overflowOpacity !== undefined) ? settings.overflowOpacity : 0.35;
+    const isSolidOverflow = (settings.overflowMode === 'solid');
 
     if (hitType === 'singularity') {
       // Event Horizon rendered in 3D: Pitch black void silhouette
@@ -1308,25 +1377,24 @@ function draw() {
           fill(55, 255, 225, 180);
           rect(xStart, bottomY - 2, colWidth, 2);
         }
-        // 2) Top overflowing portion in 2D view (y < 0): Fade out gradient with solid base at y=0, toggleable at extremes
-        if (overflowVal >= 0.99) {
-          // Max extreme: 100% Solid overflow into 2D view
+        // 2) Top overflowing portion in 2D view (y < 0): 2 Modes (Transparent Fade Out vs Solid 100% Opaque)
+        if (isSolidOverflow) {
+          // Solid 100% Opaque Mode: fully opaque void block overflowing into 2D arena
           fill(0, 0, 0);
           rect(xStart, topY, colWidth, -topY);
 
           fill(55, 255, 225, 180);
           rect(xStart, topY, colWidth, 2);
-        } else if (overflowVal > 0.01) {
-          // Smooth fade-out gradient: 100% solid black at split line (y=0), fading to 0% transparent upwards
+        } else {
+          // Transparent Mode: Atmospheric fade-out gradient (100% solid black at split line y=0, fading smoothly to 0% transparent upwards)
           const maxOverflow = Math.min(-topY, sceneH);
-          const fadeH = Math.max(1, Math.round(maxOverflow * overflowVal));
+          const fadeH = maxOverflow;
           const grad = drawingContext.createLinearGradient(0, -fadeH, 0, 0);
           grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
           grad.addColorStop(1, 'rgba(0, 0, 0, 1)');
           drawingContext.fillStyle = grad;
           drawingContext.fillRect(xStart, -fadeH, colWidth, fadeH);
         }
-        // Min extreme (overflowVal <= 0.01): Hard cutoff at split line y=0 (nothing drawn above split line)
       }
     } else {
       // Distance falloff factor t (0 for close wall, 1 for far wall)
@@ -1352,22 +1420,21 @@ function draw() {
           fill(red, green, blue);
           rect(xStart, 0, colWidth, bottomY);
         }
-        // 2) Top overflowing portion in 2D view (y < 0): Fade out gradient with solid base at y=0, toggleable at extremes
-        if (overflowVal >= 0.99) {
-          // Max extreme: 100% Solid overflow into 2D view (no fade)
+        // 2) Top overflowing portion in 2D view (y < 0): 2 Modes (Transparent Fade Out vs Solid 100% Opaque)
+        if (isSolidOverflow) {
+          // Solid 100% Opaque Mode: fully opaque solid blocks overflowing into 2D arena
           fill(red, green, blue);
           rect(xStart, topY, colWidth, -topY);
-        } else if (overflowVal > 0.01) {
-          // Smooth fade-out gradient: 100% solid wall color at split line (y=0), fading to 0% transparent upwards
+        } else {
+          // Transparent Mode: Atmospheric fade-out gradient (100% solid wall color at split line y=0, fading smoothly to 0% transparent upwards)
           const maxOverflow = Math.min(-topY, sceneH);
-          const fadeH = Math.max(1, Math.round(maxOverflow * overflowVal));
+          const fadeH = maxOverflow;
           const grad = drawingContext.createLinearGradient(0, -fadeH, 0, 0);
           grad.addColorStop(0, `rgba(${red}, ${green}, ${blue}, 0)`);
           grad.addColorStop(1, `rgba(${red}, ${green}, ${blue}, 1)`);
           drawingContext.fillStyle = grad;
           drawingContext.fillRect(xStart, -fadeH, colWidth, fadeH);
         }
-        // Min extreme (overflowVal <= 0.01): Hard cutoff at split line y=0 (nothing drawn above split line)
       }
     }
 
@@ -1404,7 +1471,7 @@ function renderHUD() {
     `[8] Fish Eye: ${Math.round(sliderFishEye.value() * 100)}%${sliderFishEye.value() === 0 ? ' (Flat)' : ''}`,
     `[9] Singularity: ${sliderRadius.value()}px${sliderRadius.value() === 0 ? ' (0px: Orbit)' : ' (Eats)'}`,
     `[0] Escape Drift: ${sliderEscape.value().toFixed(2)}${sliderEscape.value() === 0 ? ' (Closed)' : ' (Spiral)'}`,
-    `[-] Overflow: ${Math.round(sliderOverflow.value() * 100)}%${sliderOverflow.value() <= 0.01 ? ' (Cutoff)' : (sliderOverflow.value() >= 0.99 ? ' (Solid)' : ' (Fade)')}`
+    `[-] Overflow: ${settings.overflowMode === 'solid' ? 'Solid 100%' : 'Transparent'}`
   ];
 
   for (let idx = 0; idx < sliderLabels.length; idx++) {

@@ -317,6 +317,13 @@
       background: rgba(55, 255, 225, 0.15);
     }
 
+    .btn-overflow-mode.active {
+      background: rgba(55, 255, 225, 0.2) !important;
+      border-color: #37ffe1 !important;
+      color: #37ffe1 !important;
+      box-shadow: 0 0 10px rgba(55, 255, 225, 0.35);
+    }
+
     /* Toast Notification for Ctrl+S Save */
     .save-toast {
       position: fixed;
@@ -468,19 +475,22 @@
           <input type="range" id="modal-escape-slider" min="0" max="1" step="0.05" value="0.2" style="width: 100%; margin-top: 8px;">
         </div>
 
-        <!-- Setting 8: Top Wall Overflow Fade Out Gradient -->
+        <!-- Setting 8: Top Wall Overflow (2 Modes: Transparent vs Solid 100% Opaque) -->
         <div class="setting-item">
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <label for="modal-overflow-slider">Top Wall Overflow Fade Out Gradient</label>
-            <span id="modal-overflow-label" style="font-size: 13px; color: #37ffe1; font-weight: 600;">35% (Fade Out Gradient)</span>
+            <label for="modal-overflow-slider">Top Wall Overflow Mode</label>
+            <span id="modal-overflow-label" style="font-size: 13px; color: #37ffe1; font-weight: 600;">Transparent (Fade Out)</span>
           </div>
-          <p class="setting-desc">Adjusts fade-out gradient steepness of tall walls overflowing into 2D view (100% solid at split line, fading to 0% above). Toggleable at extremes:</p>
-          <input type="range" id="modal-overflow-slider" min="0" max="1" step="0.05" value="0.35" style="width: 100%; margin-top: 8px;">
+          <p class="setting-desc">2 modes for tall walls overflowing into 2D arena (Press <kbd style="background: #222d3d; padding: 2px 6px; border-radius: 4px; border: 1px solid #4a5568; color: #fff;">-</kbd> to toggle):</p>
           <div style="display: flex; gap: 8px; margin-top: 6px;">
-            <button type="button" class="btn btn-secondary btn-overflow-toggle" data-val="0" style="flex: 1; padding: 4px; font-size: 11px;">0% (Cutoff)</button>
-            <button type="button" class="btn btn-secondary btn-overflow-toggle" data-val="0.35" style="flex: 1; padding: 4px; font-size: 11px;">35% (Fade Out)</button>
-            <button type="button" class="btn btn-secondary btn-overflow-toggle" data-val="1" style="flex: 1; padding: 4px; font-size: 11px;">100% (Solid)</button>
+            <button type="button" class="btn btn-secondary btn-overflow-mode active" data-mode="transparent" style="flex: 1; padding: 8px; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px;">
+              🌌 Transparent (Fade Out)
+            </button>
+            <button type="button" class="btn btn-secondary btn-overflow-mode" data-mode="solid" style="flex: 1; padding: 8px; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px;">
+              🧱 Solid 100% Opaque
+            </button>
           </div>
+          <input type="range" id="modal-overflow-slider" min="0" max="1" step="1" value="0" style="display: none;">
         </div>
 
         <!-- Step Magnitude Controller -->
