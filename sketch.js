@@ -123,10 +123,84 @@ function loadSettings() {
   window.colorFarRgb = colorFarRgb;
 }
 
+let toastTimeout = null;
+function showSaveToast(msg = 'Settings & Game State Saved!') {
+  const toast = document.getElementById('save-toast');
+  const toastMsg = document.getElementById('save-toast-msg');
+  if (!toast) return;
+  if (toastMsg) toastMsg.textContent = msg;
+  toast.classList.add('visible');
+  if (toastTimeout) clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => {
+    toast.classList.remove('visible');
+  }, 2200);
+}
+
+function saveGameState(showFeedback = true) {
+  try {
+    // 1. Sync current active slider and engine settings
+    if (sliderSplit) settings.splitPercent = sliderSplit.value();
+    if (sliderFOV) settings.fov = sliderFOV.value();
+    if (sliderDensity) settings.density = sliderDensity.value();
+    if (sliderThreshold) settings.lodThreshold = sliderThreshold.value();
+    if (sliderMaxChunk) settings.maxChunk = sliderMaxChunk.value();
+    if (sliderCurve) settings.globalCurve = sliderCurve.value();
+    if (sliderGravity) settings.gravityMass = sliderGravity.value();
+    if (sliderFishEye) settings.fishEye = sliderFishEye.value();
+    if (sliderRadius) settings.singularityRadius = sliderRadius.value();
+    if (sliderEscape) settings.escapeFactor = sliderEscape.value();
+    if (sliderOverflow) settings.overflowOpacity = sliderOverflow.value();
+    settings.magnitude = sliderMagnitude;
+
+    // 2. Capture player state (normalized coordinates resilient to resize + heading)
+    if (particle && particle.pos && sceneW > 0 && sceneH > 0) {
+      settings.playerX = particle.pos.x / sceneW;
+      settings.playerY = particle.pos.y / sceneH;
+      settings.playerHeading = particle.heading;
+    }
+
+    // 3. Capture singularity position
+    if (singularity && sceneW > 0 && sceneH > 0) {
+      settings.singularityX = singularity.x / sceneW;
+      settings.singularityY = singularity.y / sceneH;
+      settings.gravityMass = singularity.mass;
+      settings.singularityRadius = singularity.radius;
+    }
+
+    // 4. Capture walls (interior obstacles 4..N normalized)
+    if (walls && walls.length >= 4 && sceneW > 0 && sceneH > 0) {
+      const sw = [];
+      for (let i = 4; i < walls.length; i++) {
+        if (walls[i] && walls[i].a && walls[i].b) {
+          sw.push({
+            x1: walls[i].a.x / sceneW,
+            y1: walls[i].a.y / sceneH,
+            x2: walls[i].b.x / sceneW,
+            y2: walls[i].b.y / sceneH
+          });
+        }
+      }
+      settings.savedWalls = sw;
+      settings.wallCount = walls.length;
+    }
+
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+
+    if (showFeedback) {
+      showSaveToast('💾 Settings & Game State Saved!');
+      console.log('Game state and settings saved successfully via Ctrl+S.');
+    }
+  } catch (e) {
+    console.warn('Failed to save game state:', e);
+    if (showFeedback) {
+      showSaveToast('⚠️ Failed to Save Game State');
+    }
+  }
+}
+
 function saveSettings() {
   try {
-    // Player position is strictly excluded from cached settings
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+    const dataToSave = Object.assign({}, settings, {
       splitPercent: settings.splitPercent,
       fov: settings.fov,
       wallCount: settings.wallCount,
@@ -142,8 +216,10 @@ function saveSettings() {
       singularityX: settings.singularityX,
       singularityY: settings.singularityY,
       fishEye: settings.fishEye,
+      overflowOpacity: settings.overflowOpacity,
       magnitude: sliderMagnitude
-    }));
+    });
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(dataToSave));
   } catch (e) {
     console.warn('Failed to cache settings:', e);
   }
@@ -173,15 +249,27 @@ function setup() {
   createCanvas(sceneW, sceneH + scene3DH);
 
   particle = new Particle();
-  // Player position is excluded from cache; always starts centered in top 2D view
-  particle.pos.set(sceneW / 2, sceneH / 2);
+  if (settings.playerX !== undefined && settings.playerY !== undefined) {
+    particle.pos.set(
+      constrain(settings.playerX * sceneW, 15, sceneW - 15),
+      constrain(settings.playerY * sceneH, 15, sceneH - 15)
+    );
+  } else {
+    particle.pos.set(sceneW / 2, sceneH / 2);
+  }
+  if (settings.playerHeading !== undefined) {
+    particle.heading = settings.playerHeading;
+  }
   particle.updateFOV(settings.fov);
   particle.updateDensity(1 / settings.density);
+  if (settings.playerHeading !== undefined) {
+    particle.rotate(0);
+  }
 
   // Singularity (Black hole) positioned in top 2D map
   singularity = new Singularity(
-    sceneW * (settings.singularityX || 0.65),
-    sceneH * (settings.singularityY || 0.45),
+    sceneW * (settings.singularityX !== undefined ? settings.singularityX : 0.65),
+    sceneH * (settings.singularityY !== undefined ? settings.singularityY : 0.45),
     settings.gravityMass,
     settings.singularityRadius !== undefined ? settings.singularityRadius : 15
   );
@@ -259,7 +347,7 @@ function setup() {
   initEngineSliders();
 
   window.addEventListener('resize', windowResized);
-  window.addEventListener('keydown', onGlobalKeyDown);
+  window.addEventListener('keydown', onGlobalKeyDown, { capture: true });
   initModalListeners();
 }
 
@@ -466,6 +554,14 @@ function stopAutoSlide() {
 }
 
 function onGlobalKeyDown(e) {
+  // Override Ctrl+S / Cmd+S: save current settings & game state, prevent browser Save As dialog
+  if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S' || e.code === 'KeyS')) {
+    e.preventDefault();
+    e.stopPropagation();
+    saveGameState(true);
+    return;
+  }
+
   if (e.target && (e.target.tagName === 'INPUT' && (e.target.type === 'text' || e.target.type === 'color'))) return;
 
   // If auto-slide is active, any key other than WASD cancels auto-slide immediately
@@ -869,6 +965,9 @@ function initModalListeners() {
     btnResetDefaults.addEventListener('click', () => {
       settings = Object.assign({}, defaultSettings);
       sliderMagnitude = 1;
+      try {
+        localStorage.removeItem(SETTINGS_KEY);
+      } catch (e) {}
       saveSettings();
       window.location.reload();
     });
@@ -1032,12 +1131,18 @@ function initBoundaries() {
 
 function initWalls(count) {
   walls = walls.slice(0, 4);
-  for (let i = 4; i < count; i++) {
-    let x1 = random(sceneW);
-    let x2 = random(sceneW);
-    let y1 = random(sceneH);
-    let y2 = random(sceneH);
-    walls[i] = new Boundary(x1, y1, x2, y2);
+  if (settings.savedWalls && Array.isArray(settings.savedWalls) && settings.savedWalls.length === count - 4) {
+    for (let sw of settings.savedWalls) {
+      walls.push(new Boundary(sw.x1 * sceneW, sw.y1 * sceneH, sw.x2 * sceneW, sw.y2 * sceneH));
+    }
+  } else {
+    for (let i = 4; i < count; i++) {
+      let x1 = random(sceneW);
+      let x2 = random(sceneW);
+      let y1 = random(sceneH);
+      let y2 = random(sceneH);
+      walls[i] = new Boundary(x1, y1, x2, y2);
+    }
   }
 }
 
@@ -1334,7 +1439,7 @@ function renderHUD() {
   const rightX = width - 130;
   fill(10, 15, 25, 225);
   rectMode(CORNER);
-  rect(rightX - 240, 5, 240, 114, 6);
+  rect(rightX - 240, 5, 240, 130, 6);
 
   textAlign(RIGHT);
   fill(255);
@@ -1351,5 +1456,6 @@ function renderHUD() {
   textSize(11);
   text(`⚡ Move: WASD Keys (Cross Walls)`, rightX - 10, 90);
   text(`🌌 Drag Singularity / Alt+Click`, rightX - 10, 107);
+  text(`💾 Save State: Ctrl+S`, rightX - 10, 124);
   pop();
 }
